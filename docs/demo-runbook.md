@@ -167,7 +167,38 @@ Direct reply в Telegram:
 - доменный вопрос должен пройти в `/ask`;
 - feedback-кнопки должны пройти в `/feedback`.
 
+## Aviation demo questions (после aviation pass 2026-05-16)
+
+Корпус перепрофилирован под авиагрузовую компанию. Golden-questions для проверки aviation-grounding (`refused=false`, sources указывают на ожидаемый файл, confidence ≥ `MIN_CONFIDENCE`):
+
+```powershell
+# 1. Допуск в контролируемую зону аэропорта (ожидается 01_hr_pol_attendance.md или 01_hr_pol_safety.md)
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'application/json' -Body '{"question":"Какие условия допуска работника в контролируемую зону аэропорта?"}'
+
+# 2. Aviation security обучение (ожидается 01_hr_pol_training.md или smежные HR policies)
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'application/json' -Body '{"question":"Что входит в обязательный инструктаж aviation security для сотрудников грузового терминала?"}'
+
+# 3. Dangerous goods авиаперевозкой (ожидается 05_tlog_regulation_dangerous_goods.md)
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'application/json' -Body '{"question":"Какие документы нужны для отправки dangerous goods авиатранспортом?"}'
+
+# 4. AWB/MAWB/HAWB в договоре экспедиции (ожидается 03_legal_contract_expedition*.md)
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'application/json' -Body '{"question":"Какие AWB/MAWB/HAWB документы указываются в договоре экспедиции авиагруза?"}'
+
+# 5. Претензия по повреждению авиагруза (ожидается 04_legal_claim_cargo_damage.md)
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'application/json' -Body '{"question":"Какие документы нужны для претензии по повреждению авиагруза?"}'
+
+# 6. PDP/коммерческая тайна для AWB и customer data (ожидается 06_comp_policy_pdp.md или comp_policy_data_retention.md)
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'application/json' -Body '{"question":"Сколько хранятся AWB, booking и customer data по политике сроков хранения?"}'
+
+# 7. FAQ увольнение сотрудника терминала с пропуском (ожидается 07_faq_dismissal.md)
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'application/json' -Body '{"question":"Что делать при увольнении сотрудника грузового терминала с действующим пропуском в контролируемую зону?"}'
+```
+
+Для каждого вопроса в ответе должны быть AWB/aviation security/controlled zone/dangerous goods как часть doctype profile, а `sources` — указывать на профильный документ (см. ожидания в комментариях).
+
 ## Проверка отказа
+
+Off-corpus refusal — морская перевозка не покрывается aviation corpus:
 
 ```powershell
 Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'application/json' -Body '{"question":"Какие правила перевозки лития морем?"}'
@@ -177,6 +208,12 @@ Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'ap
 
 - `refused=true`;
 - ответ сообщает, что источников недостаточно.
+
+Дополнительная проверка: автомобильное first/last mile **входит** в корпус (`07_faq_transport_road.md`, `05_tlog_contract_transport_road.md`), поэтому вопрос про CMR/ТТН на наземном плече **не** должен возвращать refused:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'application/json' -Body '{"question":"Какие документы нужны для автомобильного first/last mile авиагруза?"}'
+```
 
 ## Что показать заказчику
 

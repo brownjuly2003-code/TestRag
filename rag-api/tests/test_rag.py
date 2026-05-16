@@ -105,3 +105,46 @@ def test_probation_corpus_says_extension_is_not_allowed():
 
     assert "продление испытательного срока не допускается" in text
     assert "продление.** допускается" not in text
+
+
+def test_aviation_profile_in_hr_probation():
+    corpus_path = Path(__file__).resolve().parents[2] / "corpus" / "01_hr_probation_procedure.md"
+    text = corpus_path.read_text(encoding="utf-8").lower()
+
+    assert "допуск" in text or "пропуск" in text
+    assert "контролируем" in text or "терминал" in text or "аэропорт" in text
+
+
+def test_aviation_profile_in_dangerous_goods_regulation():
+    corpus_path = Path(__file__).resolve().parents[2] / "corpus" / "05_tlog_regulation_dangerous_goods.md"
+    text = corpus_path.read_text(encoding="utf-8").lower()
+
+    assert "dangerous goods" in text
+    assert "awb" in text or "авиа" in text
+
+
+def test_hybrid_retriever_prefers_aviation_terminal_over_office_when_aviation_query():
+    chunks = [
+        DocumentChunk(
+            chunk_id="office-onboarding",
+            content="Адаптация сотрудника в офисе компании, оформление пропуска и знакомство с командой.",
+            metadata={"file": "office_onboarding.md"},
+        ),
+        DocumentChunk(
+            chunk_id="aviation-terminal",
+            content=(
+                "Допуск работника грузового терминала в контролируемую зону аэропорта: "
+                "пропуск, обучение aviation security, dangerous goods awareness."
+            ),
+            metadata={"file": "01_hr_pol_attendance.md"},
+        ),
+    ]
+
+    retriever = HybridRetriever(chunks)
+    results = retriever.search(
+        "Какие условия допуска работника в контролируемую зону аэропорта?",
+        top_k=2,
+    )
+
+    assert results[0].chunk.chunk_id == "aviation-terminal"
+    assert confidence_from_results(results) >= 0.35

@@ -32,14 +32,17 @@
 - Текущий расширенный corpus health: `/health` -> `chunk_count=135`, `postgres_enabled=true`, `mistral_enabled=true`, `embeddings_enabled=true`.
 - Корпус по испытательному сроку исправлен: продление испытательного срока не допускается.
 - Opus handoff: исходные отчеты `opus_result_*.md`, следующий набор `opus_result_next_*.md`, follow-up отчеты `opus_result_followup_*.md`; часть follow-up файлов была подготовлена до Codex-фикса и сохранена как pre-fix triage/spec.
+- Aviation profile pass (2026-05-16, коммиты `7c6951a` + `cfd2437`): 200 corpus-файлов перепрофилированы под авиагрузовую компанию. Все категории (01_hr policies, 02_hr templates, 03_legal contracts, 04_legal claims, 05_tlog, 06_comp, 07_faq) содержат AWB/MAWB/HAWB, controlled zone, aviation security, dangerous goods, GHA, cutoff, ULD. Добавлена секция «Рабочие доказательства, сроки и эскалация» во все 200 файлов. Roadmap в `aviation-corpus-tasks/01-10`.
+- Структурные инварианты после aviation pass: `manifest_targets=200`, `corpus_files=200`, `missing=0`, `extra=0`, `missing_sections=0`, `frontmatter_issues=0`, `protected_issues=0`, `broken_corpus_refs=0`, aviation coverage 100% по всем 7 категориям.
 
 Что нужно делать дальше:
 1. Проверить, запущен ли Docker Desktop.
 2. Для минимального demo оставить DOCS_PATH=/app/data/sample_docs; для MVP-корпуса поставить DOCS_PATH=/app/corpus и DOCS_MANIFEST_PATH=/app/manifests/MVP_CORPUS_FILES.txt.
-3. Запустить docker compose up --build или пересоздать rag-api после смены DOCS_PATH.
-4. Проверить live Telegram happy path для whitelist-пользователя: `привет` и `/start` отвечают direct reply без n8n-приписки, доменный вопрос вызывает `/ask`.
-5. Проверить feedback-кнопки: good/bad пишутся в answer_feedback, bad попадает в review_queue.
-6. Прогнать docs/demo-runbook.md end-to-end.
+3. Запустить docker compose up --build или пересоздать rag-api после смены DOCS_PATH. Содержание корпуса теперь aviation-themed: ingestion перечитает 38 MVP-файлов и пересчитает embeddings.
+4. Прогнать aviation golden-questions из docs/demo-runbook.md (раздел «Aviation demo questions») и зафиксировать confidence/sources.
+5. Проверить live Telegram happy path для whitelist-пользователя: `привет` и `/start` отвечают direct reply без n8n-приписки, доменный вопрос вызывает `/ask`.
+6. Проверить feedback-кнопки: good/bad пишутся в answer_feedback, bad попадает в review_queue.
+7. Прогнать docs/demo-runbook.md end-to-end.
 
 Перед работой:
 - Не выводить .env и секреты.
