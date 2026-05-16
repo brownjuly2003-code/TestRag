@@ -571,11 +571,18 @@ async def ask(request: AskRequest) -> AskResponse:
     else:
         mistral_answer = await runtime.llm.answer(request.question, results)
         answer = mistral_answer or build_grounded_answer(request.question, results)
-        if mistral_answer and mistral_answer.strip().lower().startswith(
-            ("данных недостаточно", "не хватает", "не нашел", "не нашёл")
-        ):
-            refused = True
-            confidence = 0.0
+        if mistral_answer:
+            stripped = mistral_answer.strip()
+            lower = stripped.lower()
+            refusal_prefixes = ("данных недостаточно", "не хватает", "не нашел", "не нашёл")
+            if lower.startswith(refusal_prefixes):
+                positions = [stripped.find(p) for p in (".", "!", "?")]
+                positions = [p for p in positions if p >= 0]
+                first_sentence_end = min(positions) if positions else -1
+                body = stripped[first_sentence_end + 1 :].strip() if first_sentence_end >= 0 else ""
+                if len(body) < 120:
+                    refused = True
+                    confidence = 0.0
 
     request_log_id = runtime.store.log_request(
         telegram_user_id=request.telegram_user_id,
