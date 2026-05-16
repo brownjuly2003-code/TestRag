@@ -76,6 +76,21 @@ where id='testrag-hr-legal-assistant';
 
 Ожидаемо: `authorized_true=Feedback?`, `authorized_false=Send Denied`, `feedback_true=Send Feedback`, `feedback_false=Ask RAG API`.
 
+Для актуальной версии workflow также должна быть direct-reply ветка для приветствий и служебных коротких сообщений:
+
+```powershell
+@'
+select
+  connections->'Feedback?'->'main'->1->0->>'node' as feedback_false,
+  connections->'Direct Reply?'->'main'->0->0->>'node' as direct_reply_true,
+  connections->'Direct Reply?'->'main'->1->0->>'node' as direct_reply_false
+from n8n.workflow_entity
+where id='testrag-hr-legal-assistant';
+'@ | docker compose exec -T postgres psql -U testrag -d testrag
+```
+
+Ожидаемо: `feedback_false=Direct Reply?`, `direct_reply_true=Send Direct Reply`, `direct_reply_false=Ask RAG API`.
+
 ## Локальный Telegram Webhook
 
 Telegram не отправляет webhook на `localhost`. Для live-demo нужен публичный HTTPS tunnel:
@@ -123,6 +138,8 @@ docker compose up -d --force-recreate n8n
 
 Если бот отвечает только стандартной n8n-припиской без полезного текста, сначала проверить, что n8n был пересоздан после импорта workflow и что IF-ветки совпадают с ожидаемыми значениями из раздела выше.
 
+Актуальный workflow отключает n8n attribution для всех Telegram send-узлов. Если приписка снова появляется, переимпортировать workflow и перезапустить n8n.
+
 ## Проверка RAG API без Telegram
 
 ```powershell
@@ -135,6 +152,20 @@ Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'ap
 - `refused=false` для вопроса по демо-документам;
 - `sources` содержит файл и score;
 - `confidence` выше `MIN_CONFIDENCE`.
+
+Контрольный вопрос по исправленному корпусу:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'application/json' -Body '{"question":"Сколько может длиться испытательный срок по статье 70 ТК РФ и можно ли его продлить?"}'
+```
+
+Ожидаемо: ответ содержит, что продление испытательного срока не допускается.
+
+Direct reply в Telegram:
+
+- `привет`, `/start`, пустой текст и `спасибо` должны отвечать коротким локальным сообщением без вызова `/ask`;
+- доменный вопрос должен пройти в `/ask`;
+- feedback-кнопки должны пройти в `/feedback`.
 
 ## Проверка отказа
 

@@ -29,15 +29,20 @@ class PostgresStore:
             cursor = conn.cursor()
             for file_path in _iter_document_files(docs_path, manifest_path):
                 document_id = self._get_or_create_document(cursor, file_path)
-                cursor.execute("select count(*) from document_chunks where document_id = %s", (document_id,))
-                row = cursor.fetchone()
-                if row and row[0] > 0:
-                    inserted_count += self._backfill_missing_embeddings(cursor, document_id, embedding_client)
-                    continue
-
                 text = file_path.read_text(encoding="utf-8")
                 section = _detect_section(text)
                 chunks = _split_text(text)
+                cursor.execute(
+                    "select content from document_chunks where document_id = %s order by chunk_index",
+                    (document_id,),
+                )
+                existing_chunks = [row[0] for row in cursor.fetchall()]
+                if existing_chunks == chunks:
+                    inserted_count += self._backfill_missing_embeddings(cursor, document_id, embedding_client)
+                    continue
+                if existing_chunks:
+                    cursor.execute("delete from document_chunks where document_id = %s", (document_id,))
+
                 embeddings = embedding_client.embed_texts(chunks) if chunks else []
                 for index, chunk_text in enumerate(chunks):
                     metadata = {

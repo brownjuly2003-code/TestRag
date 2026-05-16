@@ -20,7 +20,9 @@ Previous Opus pass produced:
 - `opus_result_followup_docs_patch_plan.md` - docs patch plan.
 - `opus_result_followup_risk_burndown.md` - risk burn-down.
 
-Codex is continuing implementation and may edit `rag-api/**`, docs, compose, `.env`, manifests, and `n8n/**`. Codex also owns the live Telegram/n8n routing fix. Do not edit those files and do not run live checks.
+Codex is continuing implementation and may edit `rag-api/**`, docs, compose, `.env`, manifests, and `n8n/**`. Codex also owns the live Telegram/n8n routing fix.
+
+Status update 2026-05-16: Codex fixed the live greeting regression. The bot now replies to `привет`/`/start` through a direct-reply route without calling `/ask`, and Telegram send nodes no longer append the n8n attribution line. The follow-up reports below are kept as pre-fix triage/spec artifacts.
 
 ## Hard Rules
 
@@ -32,11 +34,23 @@ Codex is continuing implementation and may edit `rag-api/**`, docs, compose, `.e
 
 ## Next Tasks
 
-- [x] Consolidate manifest recommendation. Verify: write `opus_result_followup_manifest_decision.md` with one preferred manifest option, exact add/remove list, demo-question impact, and why alternatives were rejected.
-- [x] Build an offline answer-quality matrix. Verify: write `opus_result_followup_answer_matrix.md` mapping each selected demo question to expected source files, must-have answer points, refusal/pass criteria, and fallback wording.
-- [x] Draft Telegram-facing copy only. Verify: write `opus_result_followup_telegram_copy.md` with concise Russian text for greeting, refusal, low-confidence answer, feedback confirmation, whitelist denial, and synthetic-corpus disclaimer.
-- [x] Prepare docs patch plan without editing docs. Verify: write `opus_result_followup_docs_patch_plan.md` with target file/section, proposed wording, and priority for each remaining documentation gap.
-- [x] Update demo risk burn-down. Verify: write `opus_result_followup_risk_burndown.md` with top remaining risks after the current Codex fixes, owner, mitigation, and a 10-minute go/no-go signal.
+- [x] Static Telegram workflow triage for silent greeting. Verify: `opus_result_followup_greeting_route_triage.md` written; superseded by the Codex direct-reply fix but useful as incident triage history.
+- [x] Greeting and small-talk response contract. Verify: `opus_result_followup_greeting_contract.md` written; core greeting/empty/thanks behavior implemented in n8n.
+- [x] Silent-bot failure-mode checklist. Verify: `opus_result_followup_silent_bot_checklist.md` written.
+- [x] Regression test spec for Codex. Verify: `opus_result_followup_telegram_regression_spec.md` written; implemented critical workflow regression coverage in `rag-api/tests/test_n8n_workflow.py`.
+- [x] Demo recovery plan. Verify: `opus_result_followup_demo_recovery.md` written.
+
+## Current Codex Verification
+
+- `python -m pytest -p no:schemathesis` -> 25 passed.
+- `docker compose config --quiet` -> ok.
+- `git diff --check` -> ok.
+- `/health` -> `status=ok`, `chunk_count=135`.
+- Live `/ask` for the st. 70 probation question says that probation cannot be extended and cites updated sources.
+
+## Next Tasks
+
+- No pending Opus offline tasks in this handoff.
 
 ## Non-Goals
 

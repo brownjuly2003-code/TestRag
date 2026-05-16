@@ -97,14 +97,17 @@ class MistralEmbeddingClient:
             return [None for _ in texts]
 
         payload = {"model": self.model, "input": texts}
-        with httpx.Client(timeout=30) as client:
-            response = client.post(
-                "https://api.mistral.ai/v1/embeddings",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
+        try:
+            with httpx.Client(timeout=30) as client:
+                response = client.post(
+                    "https://api.mistral.ai/v1/embeddings",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPError:
+            return [None for _ in texts]
 
         embeddings = [item["embedding"] for item in data.get("data", [])]
         return embeddings + [None for _ in range(max(0, len(texts) - len(embeddings)))]
@@ -114,14 +117,17 @@ class MistralEmbeddingClient:
             return None
 
         payload = {"model": self.model, "input": text}
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                "https://api.mistral.ai/v1/embeddings",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.post(
+                    "https://api.mistral.ai/v1/embeddings",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPError:
+            return None
 
         items = data.get("data", [])
         return items[0]["embedding"] if items else None

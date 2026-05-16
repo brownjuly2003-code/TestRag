@@ -1,7 +1,7 @@
 # Opus Result Followup: Risk Burn-Down
 
 > Baseline: `opus_result_risks.md` (12 ranked risks).
-> Изменения с прошлого паса: Codex обновил manifest до 38 файлов, `chunk_count=122`, `documents=42`; синхронизировал термины в Mermaid; теперь владеет live Telegram/n8n routing; `MVP_CORPUS_FILES.txt` подключён к ingestion.
+> Изменения с прошлого паса: Codex обновил manifest до 38 файлов, текущий live `/health` показывает `chunk_count=135`, `documents=42`; синхронизировал термины в Mermaid; live Telegram/n8n greeting route fixed; `MVP_CORPUS_FILES.txt` подключён к ingestion.
 > Назначение: что осталось из риска, кому это адресовано, и go/no-go сигнал за 10 минут до демо.
 > Никакие правки в `corpus/`, `rag-api/`, `docs/`, `manifests/`, `.env*`, `docker-compose.yml`, `mvp-plan.md`, `README.md` не делались. Live-проверки не запускались.
 
@@ -9,7 +9,7 @@
 
 | # | Original | Score было | Score стало | Что закрыло |
 |---|----------|-----------|-------------|--------------|
-| R3 | Low source coverage (4 чанка) | 16 | 0–2 | `chunk_count=122`, `documents=42` после ingestion MVP-корпуса; 10/12 demo-вопросов уже PASS (Q6, Q8 закрываются после применения swap из `opus_result_followup_manifest_decision.md`). |
+| R3 | Low source coverage (4 чанка) | 16 | 0–2 | `chunk_count=135`, `documents=42` после ingestion MVP-корпуса; 10/12 demo-вопросов уже PASS (Q6, Q8 закрываются после применения swap из `opus_result_followup_manifest_decision.md`). |
 | R5 | PowerShell UTF-8 / кириллица | 12 | 2 | `opus_result_next_presenter_checklist.md §UTF-8` даёт `Invoke-Ask` функцию с byte-encoded payload. Закрыто при условии, что оператор использует presenter-чеклист, а не runbook напрямую. |
 
 ## Partial (часть закрыта, часть остаётся)

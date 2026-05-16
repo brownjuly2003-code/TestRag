@@ -1,5 +1,7 @@
 # Opus Result Followup: Docs Patch Plan
 
+> Status 2026-05-16: Codex applied the main README/runbook/next-session documentation updates. Current verification baseline is `python -m pytest -p no:schemathesis` -> 25 passed.
+
 > Источник: `opus_result_next_docs_delta.md` (9 ещё-открытых пунктов + 3 новых после Codex-pass).
 > Назначение: ready-to-apply patch-set для Codex. Не редактирую файлы сама — даю target + section + proposed wording.
 > Порядок: HIGH → MEDIUM → LOW. Внутри уровня — по minimal blast radius.
@@ -78,7 +80,7 @@ DOCS_MANIFEST_PATH=/app/manifests/MVP_CORPUS_FILES.txt # ограничивае�
 
 **Proposed addition (вставить после строки «- Mistral подключается через env...»):**
 ```markdown
-- В Postgres проиндексирован MVP-корпус: `documents=42`, `document_chunks=122` (см. `mvp-plan.md §Current Status`).
+- В Postgres проиндексирован MVP-корпус: `documents=42`, `document_chunks=135` (см. README §Current Status).
 - n8n workflow `hr-legal-rag-workflow.json` импортирован и активирован.
 - Telegram whitelist настроен в `.env` (`ALLOWED_TELEGRAM_USER_IDS`).
 ```
@@ -181,7 +183,7 @@ docker compose config --quiet
 python -m pytest -p no:schemathesis
 ```
 
-`docker compose config --quiet` — exit 0 без вывода; `pytest` — `15 passed` (см. `mvp-plan.md`).
+`docker compose config --quiet` — exit 0 без вывода; `pytest` — `25 passed`.
 ````
 
 **Rationale:** закрывает finding #10. Команды уже фигурируют в `docs/next-session.md §Минимальные команды` и `mvp-plan.md` — README ставит их в видимое место.
@@ -288,7 +290,7 @@ python -m pytest -p no:schemathesis
 1. `git diff README.md mvp-plan.md docs/demo-runbook.md` — проверить, что не зацепил соседние секции.
 2. `markdownlint README.md mvp-plan.md docs/*.md` (если в проекте есть линтер) — отсутствие сломанных code fences.
 3. Markdown preview всех трёх файлов в IDE — таблицы и кодовые блоки рендерятся.
-4. `python -m pytest -p no:schemathesis` — должно остаться `15 passed`, документация не должна вызвать regression (но pytest на docs ничего не проверяет напрямую — это sanity на код).
+4. `python -m pytest -p no:schemathesis` — должно остаться `25 passed`, документация не должна вызвать regression (но pytest на docs ничего не проверяет напрямую — это sanity на код).
 5. Re-run `opus_result_next_docs_delta.md` cross-check вручную: статусы PARTIAL должны стать CLOSED для #1, #2, #3, OPEN → CLOSED для #5, #6, #8, #10, #11, #12.
 
 ## Verification (self-check)

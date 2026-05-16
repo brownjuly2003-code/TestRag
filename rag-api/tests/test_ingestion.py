@@ -9,14 +9,19 @@ class FakeCursor:
         self.queries = []
         self.inserted_chunks = []
         self.updated_chunks = []
+        self.deleted_document_ids = []
         self._fetchone = None
+        self.last_query = ""
 
     def execute(self, query, params=None):
+        self.last_query = query
         self.queries.append((query, params))
         if "insert into document_chunks" in query:
             self.inserted_chunks.append(params)
         if "update document_chunks" in query:
             self.updated_chunks.append(params)
+        if "delete from document_chunks" in query:
+            self.deleted_document_ids.append(params[0])
         if "returning id" in query:
             self._fetchone = ("document-1",)
 
@@ -55,11 +60,23 @@ class BackfillCursor(FakeCursor):
         super().execute(query, params)
         if "select id::text from documents" in query:
             self._fetchone = ("document-1",)
-        if "select count(*) from document_chunks" in query:
-            self._fetchone = (1,)
 
     def fetchall(self):
-        return [("chunk-1", "Текст политики отпусков.")]
+        if "select content from document_chunks" in self.last_query:
+            return [("# Policy Текст политики отпусков.",)]
+        return [("chunk-1", "# Policy Текст политики отпусков.")]
+
+
+class ExistingChangedCursor(FakeCursor):
+    def execute(self, query, params=None):
+        super().execute(query, params)
+        if "select id::text from documents" in query:
+            self._fetchone = ("document-1",)
+
+    def fetchall(self):
+        if "select content from document_chunks" in self.last_query:
+            return [("Старый текст политики.",)]
+        return []
 
 
 def test_ingestion_writes_chunks_with_mistral_embeddings(monkeypatch):
@@ -127,3 +144,22 @@ def test_ingestion_backfills_missing_embeddings_for_existing_chunks(monkeypatch)
     assert cursor.updated_chunks
     assert cursor.updated_chunks[0][0].startswith("[0.1,")
     assert cursor.updated_chunks[0][1] == "chunk-1"
+
+
+def test_ingestion_replaces_chunks_when_existing_document_changes(monkeypatch):
+    Path(".pytest_cache").mkdir(exist_ok=True)
+    with TemporaryDirectory(dir=Path(".pytest_cache")) as temp_dir:
+        docs_path = Path(temp_dir) / "docs"
+        docs_path.mkdir()
+        (docs_path / "policy.md").write_text("# Policy\n\nНовый текст политики.", encoding="utf-8")
+        cursor = ExistingChangedCursor()
+        store = PostgresStore("postgresql://local/test")
+
+        monkeypatch.setattr(store, "_connect", lambda: FakeConnection(cursor))
+
+        inserted_count = store.ingest_documents(docs_path, FakeEmbeddingClient())
+
+    assert inserted_count == 1
+    assert cursor.deleted_document_ids == ["document-1"]
+    assert cursor.inserted_chunks
+    assert cursor.inserted_chunks[0][2] == "# Policy Новый текст политики."

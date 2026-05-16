@@ -24,17 +24,20 @@
 - SQL init schema в sql/init.sql.
 - n8n workflow JSON в n8n/workflows/hr-legal-rag-workflow.json.
 - n8n IF-маршрутизация исправлена и активный workflow переимпортирован: `Authorized?` true -> `Feedback?`, false -> `Send Denied`; `Feedback?` true -> `Send Feedback`, false -> `Ask RAG API`.
-- ingestion в Postgres: chunks + Mistral embeddings + document_chunks.
+- n8n direct-reply маршрут добавлен: `привет`, `/start`, пустые сообщения и благодарности отвечают без `/ask`; n8n attribution отключена на Telegram send-узлах.
+- ingestion в Postgres: chunks + Mistral embeddings + document_chunks; измененные документы переиндексируются, отсутствующие embeddings дозаполняются.
+- Mistral embeddings HTTP-ошибки не валят `/health` и `/ask`: RAG продолжает работать через текстовый retrieval.
 - реальные логи request_logs, answer_feedback, review_queue.
-- pytest: 15 тестов проходят.
-- Текущий расширенный corpus health: `/health` -> `chunk_count=122`, `postgres_enabled=true`, `mistral_enabled=true`, `embeddings_enabled=true`.
-- Opus handoff: исходные отчеты `opus_result_*.md`, следующий набор `opus_result_next_*.md`, новые независимые задачи в `opus_task.md` пишут только `opus_result_followup_*.md`.
+- pytest: 25 тестов проходят.
+- Текущий расширенный corpus health: `/health` -> `chunk_count=135`, `postgres_enabled=true`, `mistral_enabled=true`, `embeddings_enabled=true`.
+- Корпус по испытательному сроку исправлен: продление испытательного срока не допускается.
+- Opus handoff: исходные отчеты `opus_result_*.md`, следующий набор `opus_result_next_*.md`, follow-up отчеты `opus_result_followup_*.md`; часть follow-up файлов была подготовлена до Codex-фикса и сохранена как pre-fix triage/spec.
 
 Что нужно делать дальше:
 1. Проверить, запущен ли Docker Desktop.
 2. Для минимального demo оставить DOCS_PATH=/app/data/sample_docs; для MVP-корпуса поставить DOCS_PATH=/app/corpus и DOCS_MANIFEST_PATH=/app/manifests/MVP_CORPUS_FILES.txt.
 3. Запустить docker compose up --build или пересоздать rag-api после смены DOCS_PATH.
-4. Проверить live Telegram happy path для whitelist-пользователя: `привет` не должен возвращать пустую n8n-приписку, доменный вопрос должен вызвать `/ask`.
+4. Проверить live Telegram happy path для whitelist-пользователя: `привет` и `/start` отвечают direct reply без n8n-приписки, доменный вопрос вызывает `/ask`.
 5. Проверить feedback-кнопки: good/bad пишутся в answer_feedback, bad попадает в review_queue.
 6. Прогнать docs/demo-runbook.md end-to-end.
 

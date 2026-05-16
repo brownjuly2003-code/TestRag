@@ -1,4 +1,5 @@
 from app.rag import AnswerPolicy, DocumentChunk, HybridRetriever, confidence_from_results
+from pathlib import Path
 
 
 def test_hybrid_retriever_prefers_exact_legal_term_match():
@@ -96,3 +97,11 @@ def test_confidence_stays_low_when_specific_terms_are_missing():
     results = retriever.search("Какие правила перевозки лития морем?", top_k=2)
 
     assert confidence_from_results(results) < 0.35
+
+
+def test_probation_corpus_says_extension_is_not_allowed():
+    corpus_path = Path(__file__).resolve().parents[2] / "corpus" / "01_hr_probation_procedure.md"
+    text = corpus_path.read_text(encoding="utf-8").lower()
+
+    assert "продление испытательного срока не допускается" in text
+    assert "продление.** допускается" not in text

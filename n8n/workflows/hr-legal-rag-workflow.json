@@ -27,7 +27,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const allowed = ($env.ALLOWED_TELEGRAM_USER_IDS || '').split(',').map(v => v.trim()).filter(Boolean);\nconst callbackData = $json.callback_query?.data || '';\nconst feedbackParts = callbackData.startsWith('feedback:') ? callbackData.split(':') : [];\nconst isFeedback = feedbackParts.length >= 2;\nconst message = $json.message || $json.callback_query?.message || {};\nconst from = $json.message?.from || $json.callback_query?.from || {};\nconst userId = String(from.id || '');\nif (!allowed.length) {\n  return [{ json: { authorized: false, chat_id: message.chat?.id, user_id: userId, text: `Whitelist не настроен. Ваш Telegram ID: ${userId}. Добавьте его в ALLOWED_TELEGRAM_USER_IDS в локальном .env и перезапустите n8n.` } }];\n}\nif (!allowed.includes(userId)) {\n  return [{ json: { authorized: false, chat_id: message.chat?.id, user_id: userId, text: `Доступ запрещен. Ваш Telegram ID: ${userId}.` } }];\n}\nreturn [{ json: { authorized: true, event_type: isFeedback ? 'feedback' : 'question', chat_id: message.chat?.id, user_id: userId, text: message.text || callbackData || '', rating: isFeedback ? feedbackParts[1] : null, request_log_id: isFeedback ? (feedbackParts[2] || null) : null } }];"
+        "jsCode": "const allowed = ($env.ALLOWED_TELEGRAM_USER_IDS || '').split(',').map(v => v.trim()).filter(Boolean);\nconst callbackData = $json.callback_query?.data || '';\nconst feedbackParts = callbackData.startsWith('feedback:') ? callbackData.split(':') : [];\nconst isFeedback = feedbackParts.length >= 2;\nconst message = $json.message || $json.callback_query?.message || {};\nconst from = $json.message?.from || $json.callback_query?.from || {};\nconst userId = String(from.id || '');\nconst rawText = message.text || callbackData || '';\nconst normalizedText = rawText.trim().toLowerCase().replace(/ё/g, 'е').replace(/[.!?,]+$/g, '');\nconst greetingText = 'Здравствуйте. Я HR/legal RAG-ассистент TestRag. Задайте вопрос по кадровым, юридическим или договорным документам, а я отвечу по базе знаний и покажу источники.';\nlet eventType = isFeedback ? 'feedback' : 'question';\nlet text = rawText;\nif (!isFeedback && !normalizedText) {\n  eventType = 'direct_reply';\n  text = 'Пока я понимаю только текстовые вопросы. Задайте вопрос по HR, юридическим или договорным документам одним сообщением.';\n}\nif (!isFeedback && ['привет', 'здравствуйте', 'добрый день', 'доброе утро', 'добрый вечер', 'hello', 'hi', '/start', 'start'].includes(normalizedText)) {\n  eventType = 'direct_reply';\n  text = greetingText;\n}\nif (!isFeedback && ['спасибо', 'благодарю'].includes(normalizedText)) {\n  eventType = 'direct_reply';\n  text = 'Пожалуйста. Если нужен разбор по HR/legal документам, задайте вопрос одним сообщением.';\n}\nif (!allowed.length) {\n  return [{ json: { authorized: false, chat_id: message.chat?.id, user_id: userId, text: `Whitelist не настроен. Ваш Telegram ID: ${userId}. Добавьте его в ALLOWED_TELEGRAM_USER_IDS в локальном .env и перезапустите n8n.` } }];\n}\nif (!allowed.includes(userId)) {\n  return [{ json: { authorized: false, chat_id: message.chat?.id, user_id: userId, text: `Доступ запрещен. Ваш Telegram ID: ${userId}.` } }];\n}\nreturn [{ json: { authorized: true, event_type: eventType, chat_id: message.chat?.id, user_id: userId, text, rating: isFeedback ? feedbackParts[1] : null, request_log_id: isFeedback ? (feedbackParts[2] || null) : null } }];"
       },
       "id": "whitelist",
       "name": "Whitelist",
@@ -41,10 +41,21 @@
     {
       "parameters": {
         "conditions": {
-          "boolean": [
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
             {
-              "value1": "={{ $json.authorized }}",
-              "value2": true
+              "leftValue": "={{ String($json.authorized) }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
             }
           ]
         }
@@ -61,10 +72,21 @@
     {
       "parameters": {
         "conditions": {
-          "string": [
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
             {
-              "value1": "={{ $json.event_type }}",
-              "value2": "feedback"
+              "leftValue": "={{ $json.event_type }}",
+              "rightValue": "feedback",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
             }
           ]
         }
@@ -116,6 +138,60 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.event_type }}",
+              "rightValue": "direct_reply",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "direct-reply-if",
+      "name": "Direct Reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        180,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "send-direct-reply",
+      "name": "Send Direct Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        420,
+        -240
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "testrag-telegram-api",
+          "name": "TestRag Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
         "jsCode": "const sources = ($json.sources || []).map((s, i) => `${i + 1}. ${s.file || s.chunk_id} (${s.section || 'раздел не указан'}, score ${s.score})`).join('\\n');\nconst text = `${$json.answer}\\n\\nConfidence: ${$json.confidence}\\n${sources ? `\\nИсточники:\\n${sources}` : ''}`;\nreturn [{ json: { chat_id: $node['Whitelist'].json.chat_id, text, request_log_id: $json.request_log_id || '' } }];"
       },
       "id": "format-answer",
@@ -145,6 +221,7 @@
         "chatId": "={{ $json.chat_id }}",
         "text": "={{ $json.text }}",
         "additionalFields": {
+          "appendAttribution": false,
           "replyMarkup": "inlineKeyboard",
           "inlineKeyboard": {
             "rows": [
@@ -188,7 +265,10 @@
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "={{ $json.text }}"
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
       "id": "send-feedback-ack",
       "name": "Send Feedback Ack",
@@ -208,7 +288,10 @@
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "={{ $json.text }}"
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
       "id": "send-denied",
       "name": "Send Denied",
@@ -272,6 +355,24 @@
         [
           {
             "node": "Send Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Direct Reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Direct Reply?": {
+      "main": [
+        [
+          {
+            "node": "Send Direct Reply",
             "type": "main",
             "index": 0
           }
