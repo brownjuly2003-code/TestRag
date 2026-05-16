@@ -8,51 +8,37 @@
 Продолжаем проект D:\TestRag.
 
 Контекст:
-- MVP HR/legal RAG-ассистент по ТЗ из PDF, перепрофилирован под авиагрузовую компанию.
-- Стек: FastAPI + Mistral + hybrid retrieval (BM25 + pgvector) → n8n оркестратор → Telegram-бот @AIagentJu_bot.
-- База: Postgres/pgvector через Docker Compose.
-- Telegram bot token и Mistral API key — только в локальном .env, не выводить.
+- MVP HR/legal RAG-ассистент. Aviation profile pass на 200 docs, MVP-44 (chunk_count=207, docs=48 после Sprint 2 ingest).
+- Стек: FastAPI + Mistral + hybrid retrieval (BM25 + pgvector) → n8n оркестратор (22 узла) → Telegram-бот @AIagentJu_bot.
 - Документация: README.md, mvp-plan.md, docs/demo-runbook.md, docs/legal-document-prompts.md, docs/research/SYNTHESIS.md.
 
-Текущее состояние (HEAD после Sprint 1 commit, 2026-05-17 day):
-- 200 corpus-файлов прошли aviation profile pass. MVP подборка 44 файла, chunk_count=207 после ingest.
-- pytest 44/44 (rag-api/tests/: test_ingestion, test_llm, test_n8n_workflow x18, test_rag, test_api).
+Текущее состояние (HEAD `ef23933`, 2026-05-17 day):
+- pytest 63/63 (+12 Sprint 1, +6 Sprint 1 fixes, +14 Sprint 2).
+- Sprint 1 deployed + smoke ✓ (TG controlled-zone question: HTML рендер с MD→HTML конверсией, typing, 2 кнопки 👍/👎 с drill-down на 👎).
+- Sprint 2 deployed:
+  - M7 schema: answer_feedback +category +free_text +chunk_ids (auto-pulled из request_logs.sources).
+  - M5 команды: /help (HTML список), /clear (про stateless), /history (последние 5 из request_logs с русским склонением), /docs (8 категорий, total 48 docs).
+  - N5 endpoint: GET /docs/summary с category-grouped count.
 - Cloudflare tunnel: trycloudflare URLs эфемерны, пересоздавать процедурой из docs/demo-runbook.md.
-- Sprint 1 (bot UX polish) — закрыт в коде/тестах, ждёт n8n re-import + TG-смок.
 
-Sprint 1 — что сделано (workflow JSON + Format Answer JS + Whitelist JS):
-- M2+A1: Send Answer теперь 2 кнопки (👍 Полезно / 👎 Неточно). Кнопка «📋 Нужны источники» удалена.
-- M3: новый HTTP-узел Send Typing вызывает Bot API sendChatAction('typing') между Direct Reply? (false) и Ask RAG API. Использует $env.TELEGRAM_BOT_TOKEN. neverError=true — задержка тайпинга не блокирует ответ.
-- M4: parse_mode='HTML' проставлен на Send Answer / Send Direct Reply / Send Feedback Ack / Send Denied. Format Answer переписан с HTML-escape (`<` → `&lt;`), filenames в `<code>...</code>`, убран escapeUnderscores.
-- M6: «Confidence: N» удалён. Вместо — «Найдено N релевантных документ(а/ов)» с русским склонением (1 → «релевантный документ», 2-4 → «релевантных документа», 5+ → «релевантных документов», 11-14 → fallback на множественное).
-- M1 шаг 1: feedback:bad: больше НЕ пишет /feedback сразу. Whitelist возвращает event_type=feedback_bad_clarify → новый узел Bad Clarify? (If) → новый HTTP-узел Edit Reply Markup → Bot API editMessageReplyMarkup подменяет клавиатуру на 3 reason-кнопки. Reason-клик (feedback:bad_inaccurate / bad_outdated / bad_human) → /feedback с comment=category:<reason>. Reason-категория попадёт в существующий answer_feedback.comment (без миграции схемы; Sprint 2 M7 добавит отдельный column).
+Что осталось (Sprint 3, по приоритету):
+1. **N1 follow-up question buttons** (отложен из Sprint 2): 2 кнопки «уточняющий вопрос» в Send Answer, на основе section заголовков top-3 chunks. Challenge: TG callback_data лимит 64 байта → encode index, lookup через request_log_id.sources в Whitelist при клике.
+2. **N3 Human handover**: кнопка «🧑‍💼 Связать с HR» при low confidence или категории «human» → запись в review_queue с last 5 messages.
+3. **N4 Conversation threading**: хранить thread_id в n8n (reply-to-message), подмешивать prev 3 QA в retrieval query.
+4. **N2 Quick-actions**: «Уточнить» (rerun с top_k=10), «Развернуть» (full chunk вместо snippet).
+5. Retrieval quality issue (вне Sprint roadmap): controlled-zone Q сейчас даёт top=02_hr_tmp_employment_contract.md score 0.426 вместо 01_hr_pol_safety.md score 0.97 как было раньше. Возможно MVP manifest изменился или chunks re-ingested после aviation pass. Проверить chunk_count vs docs_count в /health.
 
-Sprint 1 deployed (2026-05-17 day):
-- n8n re-import + activate + recreate выполнено. В БД 16 узлов, parse_mode=HTML на 4 send-узлах, 2 кнопки в Send Answer, новые Bad Clarify? / Edit Reply Markup / Send Typing присутствуют. Whitelist code содержит 'feedback_bad_clarify'.
-- Healthchecks: rag-api /health OK (chunk_count=207), n8n=200, cloudflare tunnel healthz=200, TG getWebhookInfo pending_update_count=0.
-
-Что осталось — 30-секундный TG-смок (только юзер: синтетический POST в n8n webhook блокирован TG-secret-токеном, генерится in-memory):
-1. В @AIagentJu_bot отправить «Что такое controlled zone?» → ожидаем typing-индикатор → HTML-ответ + «Найдено N релевантных документов» (без слова «Confidence») + 2 кнопки (👍/👎).
-2. Клик 👎 → клавиатура исходного сообщения меняется на 3 reason-кнопки (без нового сообщения).
-3. Клик на «Неточно» → «Оценка принята.» и в Postgres answer_feedback.comment = 'category:inaccurate':
-
-   docker compose exec -T postgres psql -U testrag -d testrag -tA -c "select rating, comment, created_at from answer_feedback order by created_at desc limit 3;"
-
-Если что-то не сработало:
-- Кнопки не пришли → проверь parse_mode (queries в разделе «После import workflow проверь схему» ниже).
-- Drill-down не сработал (👎 ничего не делает) → docker compose logs --tail=50 n8n | grep -i error.
-- TG webhook потерян после restart → curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo" должен показать наш cloudflare URL.
-
-Sprint 2 (после успешного смока, см. SYNTHESIS.md):
-- M5: команды /help, /clear, /history.
-- M7: расширить answer_feedback (chunk_ids, category enum, free_text).
-- N1: 2 follow-up question buttons.
-- N5: /docs.
+Sprint 2 TG-смок (если ещё не пробовала):
+1. /help — ожидаем HTML список команд + примеры.
+2. /history — ожидаем «Последние N запросов» с историей.
+3. /docs — ожидаем «Корпус: 48 документов» + 8 категорий.
+4. Любой вопрос → typing + HTML-ответ (с `<b>` вместо `**`) + плюрализация.
+5. Клик 👎 → 3 reason-кнопки, выбор → answer_feedback.category=inaccurate/outdated/human.
 
 Перед работой:
 - Не выводить .env, токены, ключи в чат.
-- После изменений python-кода запускать python -m pytest -p no:schemathesis (ожидаем 44/44).
-- После изменений n8n workflow: re-import (см. шаг 1 выше).
+- После изменений python-кода: docker compose build rag-api && docker compose up -d --force-recreate rag-api && python -m pytest -p no:schemathesis (ожидаем 63/63).
+- После изменений n8n workflow: MSYS_NO_PATHCONV=1 docker compose exec -T n8n n8n import:workflow --input=/workflows/hr-legal-rag-workflow.json --projectId=AAx39VT08WENfUYU && MSYS_NO_PATHCONV=1 docker compose exec -T n8n n8n update:workflow --active=true --id=testrag-hr-legal-assistant && docker compose up -d --force-recreate n8n.
 - Перед TG-смоком проверить, жив ли cloudflare tunnel: curl ${N8N_WEBHOOK_URL}healthz должен вернуть 200.
 ```
 
@@ -60,26 +46,28 @@ Sprint 2 (после успешного смока, см. SYNTHESIS.md):
 
 ```powershell
 cd D:\TestRag
-python -m pytest -p no:schemathesis  # 44 passed
+python -m pytest -p no:schemathesis  # 63 passed
 docker compose config --quiet
 docker compose up -d
-curl http://localhost:8000/health    # ожидается chunk_count=207
+curl http://localhost:8000/health    # chunk_count=207, postgres_enabled=true
+curl 'http://localhost:8000/history?telegram_user_id=432751211&limit=5'
+curl http://localhost:8000/docs/summary
 ```
 
-## После import workflow проверь схему
+## Sprint 2 schema check
 
 ```powershell
-docker compose exec -T postgres psql -U testrag -d testrag -tA -c "select n->>'name' from n8n.workflow_entity, jsonb_array_elements(nodes::jsonb) n where id='testrag-hr-legal-assistant' order by 1;"
+docker compose exec -T postgres psql -U testrag -d testrag -tA -c "\d answer_feedback"
 ```
 
-Ожидаемо: 16 узлов, в т.ч. `Bad Clarify?`, `Edit Reply Markup`, `Send Typing`.
+Ожидаемо: 9 columns (id, request_log_id, telegram_user_id, rating, comment, created_at, category, free_text, chunk_ids).
 
 ```powershell
-docker compose exec -T postgres psql -U testrag -d testrag -tA -c "select n->'parameters'->'additionalFields'->>'parse_mode' from n8n.workflow_entity, jsonb_array_elements(nodes::jsonb) n where id='testrag-hr-legal-assistant' and n->>'name'='Send Answer';"
+docker compose exec -T postgres psql -U testrag -d testrag -tA -c "select category, free_text, jsonb_array_length(chunk_ids) from answer_feedback order by created_at desc limit 5;"
 ```
 
-Ожидаемо: `HTML`. Если null — re-import не применился, повторить.
+После TG-смока с 👎 → Неточно: должна быть строка с category='inaccurate', chunk_ids — массив uuid из request_logs.sources.
 
 ## Если cloudflare tunnel умер
 
-`docker logs testrag-cloudflared` пусто или контейнер не запущен → URLs эфемерные. Процедура восстановления — `docs/demo-runbook.md` раздел «Локальный Telegram Webhook» (6 шагов: rm контейнера → новый run → grep URL → заменить N8N_WEBHOOK_URL → recreate n8n → verify webhook).
+`docker logs testrag-cloudflared` пусто или контейнер не запущен → URLs эфемерные. Процедура восстановления — `docs/demo-runbook.md` раздел «Локальный Telegram Webhook».
