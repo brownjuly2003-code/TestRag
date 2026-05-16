@@ -8,60 +8,68 @@
 Продолжаем проект D:\TestRag.
 
 Контекст:
-- Это MVP HR/legal RAG-ассистента по ТЗ из PDF.
-- n8n нужен как self-hosted оркестратор, не покупаем n8n Cloud.
-- RAG API: FastAPI, Mistral, hybrid retrieval = BM25 + pgvector.
+- MVP HR/legal RAG-ассистент по ТЗ из PDF, перепрофилирован под авиагрузовую компанию.
+- Стек: FastAPI + Mistral + hybrid retrieval (BM25 + pgvector) → n8n оркестратор → Telegram-бот @AIagentJu_bot.
 - База: Postgres/pgvector через Docker Compose.
-- Telegram bot: токен лежит только в локальном .env, его не выводить.
-- Документация: README.md, mvp-plan.md, docs/demo-runbook.md, docs/legal-document-prompts.md.
-- MVP-корпус включается безопасно через DOCS_PATH + DOCS_MANIFEST_PATH, чтобы не индексировать все 200 corpus-файлов случайно.
+- Telegram bot token и Mistral API key — только в локальном .env, не выводить.
+- Документация: README.md, mvp-plan.md, docs/demo-runbook.md, docs/legal-document-prompts.md, docs/research/SYNTHESIS.md.
 
-Что уже сделано:
-- docker-compose.yml для n8n + Postgres/pgvector + rag-api.
-- RAG API с /health, /ask, /feedback, /document/type-detection.
-- BM25 retriever и confidence policy.
-- sample docs в data/sample_docs и manifest shortlist в manifests/MVP_CORPUS_FILES.txt.
-- SQL init schema в sql/init.sql.
-- n8n workflow JSON в n8n/workflows/hr-legal-rag-workflow.json.
-- n8n IF-маршрутизация исправлена и активный workflow переимпортирован: `Authorized?` true -> `Feedback?`, false -> `Send Denied`; `Feedback?` true -> `Send Feedback`, false -> `Ask RAG API`.
-- n8n direct-reply маршрут добавлен: `привет`, `/start`, пустые сообщения и благодарности отвечают без `/ask`; n8n attribution отключена на Telegram send-узлах.
-- ingestion в Postgres: chunks + Mistral embeddings + document_chunks; измененные документы переиндексируются, отсутствующие embeddings дозаполняются.
-- Mistral embeddings HTTP-ошибки не валят `/health` и `/ask`: RAG продолжает работать через текстовый retrieval.
-- реальные логи request_logs, answer_feedback, review_queue.
-- pytest: 25 тестов проходят.
-- Текущий расширенный corpus health: `/health` -> `chunk_count=135`, `postgres_enabled=true`, `mistral_enabled=true`, `embeddings_enabled=true`.
-- Корпус по испытательному сроку исправлен: продление испытательного срока не допускается.
-- Opus handoff: исходные отчеты `opus_result_*.md`, следующий набор `opus_result_next_*.md`, follow-up отчеты `opus_result_followup_*.md`; часть follow-up файлов была подготовлена до Codex-фикса и сохранена как pre-fix triage/spec.
-- Aviation profile pass (2026-05-16, коммиты `7c6951a` + `cfd2437`): 200 corpus-файлов перепрофилированы под авиагрузовую компанию. Все категории (01_hr policies, 02_hr templates, 03_legal contracts, 04_legal claims, 05_tlog, 06_comp, 07_faq) содержат AWB/MAWB/HAWB, controlled zone, aviation security, dangerous goods, GHA, cutoff, ULD. Добавлена секция «Рабочие доказательства, сроки и эскалация» во все 200 файлов. Roadmap в `aviation-corpus-tasks/01-10`.
-- Структурные инварианты после aviation pass: `manifest_targets=200`, `corpus_files=200`, `missing=0`, `extra=0`, `missing_sections=0`, `frontmatter_issues=0`, `protected_issues=0`, `broken_corpus_refs=0`, aviation coverage 100% по всем 7 категориям.
-- TG E2E подтверждён 2026-05-16/17: «привет» direct-reply OK, aviation Q «controlled zone» полный RAG-путь OK через @AIagentJu_bot, ответ с aviation-grounded content (controlled zone, AWB, dangerous goods, aviation security) и source attribution.
-- RAG fix (2026-05-17 `e26a7da`/`4545982`): Mistral cautious lead-in («Данных недостаточно. Однако...») больше не обрезается к refused. 429 от free tier теперь graceful degrade на build_grounded_answer. Helper `is_pure_refusal()` вынесен с 4 unit-тестами. Golden Q 10/10 PASSED.
-- MVP-корпус расширен до 44 файлов (2026-05-17 `7a798ec`): добавлены attendance, safety, training, business_trip, data_retention, faq_dismissal — покрывают controlled zone / aviation security / dangerous goods / retention / dismissal с пропуском demo Qs. chunk_count 179→207.
-- TG keyboard fix (2026-05-17): underscore escape в Format Answer (TG Markdown V1 ел `_` в filenames), dedup sources, и `replyMarkup` перенесён из `additionalFields` в top-level params (root cause «кнопок не видела»). Кнопки временные «👍 Полезно / 👎 Неточно / 📋 Нужны источники» — будут изменены по research-синтезу.
-- Bot UX research завершён (2026-05-17): запрошены параллельно Kimi и Codex, оба независимых прохода сохранены в `docs/research/2026-05-17-{kimi,codex}-bot-ux.md`. Консенсусный синтез с приоритизацией в `docs/research/SYNTHESIS.md`. Sprint-планы добавлены в `mvp-plan.md` (раздел Bot UX Roadmap).
+Текущее состояние (HEAD 9564ecb, 2026-05-17 night):
+- 200 corpus-файлов прошли aviation profile pass (AWB/MAWB/HAWB, controlled zone, aviation security, dangerous goods, GHA, ULD, cutoff). Все категории покрыты.
+- Структурные инварианты: manifest=200, missing=0, extra=0, missing_sections=0, frontmatter_issues=0, protected_issues=0, broken_corpus_refs=0, aviation coverage 100%.
+- MVP подборка 44 файла (manifests/MVP_CORPUS_FILES.txt), chunk_count=207 после ingest.
+- pytest 32/32 (rag-api/tests/: test_ingestion, test_llm, test_n8n_workflow, test_rag, test_api).
+- Golden Q 10/10 PASSED через POST /ask (см. python-скрипт в этой сессии или docs/demo-runbook.md «Aviation demo questions»).
+- TG E2E подтверждён: «привет» direct-reply OK; aviation Q «controlled zone» полный RAG-путь OK через @AIagentJu_bot. Inline-кнопки feedback теперь приходят (root cause fix: replyMarkup перенесён с additionalFields в top-level params n8n v1.2 Telegram-node).
+- Cloudflare tunnel: trycloudflare URLs эфемерны, пересоздавать процедурой из docs/demo-runbook.md.
 
-Что нужно делать дальше:
-1. Проверить, запущен ли Docker Desktop.
-2. Для минимального demo оставить DOCS_PATH=/app/data/sample_docs; для MVP-корпуса поставить DOCS_PATH=/app/corpus и DOCS_MANIFEST_PATH=/app/manifests/MVP_CORPUS_FILES.txt.
-3. Запустить docker compose up --build или пересоздать rag-api после смены DOCS_PATH. Содержание корпуса теперь aviation-themed: ingestion перечитает 38 MVP-файлов и пересчитает embeddings.
-4. Прогнать aviation golden-questions из docs/demo-runbook.md (раздел «Aviation demo questions») и зафиксировать confidence/sources.
-5. Проверить live Telegram happy path для whitelist-пользователя: `привет` и `/start` отвечают direct reply без n8n-приписки, доменный вопрос вызывает `/ask`.
-6. Проверить feedback-кнопки: good/bad пишутся в answer_feedback, bad попадает в review_queue.
-7. Прогнать docs/demo-runbook.md end-to-end.
+Что закрыто этим путём:
+- RAG fix (e26a7da, 4545982): Mistral cautious lead-in («Данных недостаточно. Однако...») больше не обрезается к refused. Helper is_pure_refusal() вынесен с 4 unit-тестами. 429 от Mistral free tier — graceful degrade на build_grounded_answer.
+- MVP-корпус расширен на 6 файлов (7a798ec): attendance, safety, training, business_trip, data_retention, faq_dismissal — для controlled zone / aviation security / dangerous goods / retention / dismissal с пропуском.
+- TG keyboard fix (9564ecb): underscore escape в Format Answer, dedup sources, replyMarkup root-cause fix. Кнопки временные «👍 Полезно / 👎 Неточно / 📋 Нужны источники».
+
+Bot UX research (Kimi + Codex, 2026-05-17):
+- Оба независимых прохода в docs/research/2026-05-17-{kimi,codex}-bot-ux.md.
+- Консенсусный синтез + 3 sprint roadmap в docs/research/SYNTHESIS.md.
+- Sprint 1 уже частично в mvp-plan.md «Bot UX Roadmap».
+
+Что делать дальше (Sprint 1 из SYNTHESIS, must-have):
+1. **Убрать кнопку «📋 Нужны источники»** — анти-паттерн по обоим research-проходам. Sources должны быть всегда inline (они и сейчас в тексте ответа). Оставить 2 кнопки.
+2. **Typing indicator**: добавить узел sendChatAction('typing') в n8n workflow между Whitelist и Ask RAG API.
+3. **HTML formatting**: перейти на parse_mode='HTML' в Send Answer. Обновить Format Answer JS: **bold** → <b>, filenames → <code>, citations → <a>. Markdown V1 хрупкий для legal-цитат.
+4. **Behavioral confidence**: убрать «Confidence: N» из текста, заменить на «Найдено N релевантных документов».
+5. **Conditional feedback на 👎**: при нажатии bad показать 3 reason-кнопки (Неточно / Устарело / Нужен человек), записать категорию в answer_feedback.
+6. **Команды**: /help (примеры запросов), /clear (reset session), /history (последние 5 запросов юзера из request_logs).
+
+Sprint 2 / Sprint 3 — см. mvp-plan.md «Bot UX Roadmap» и docs/research/SYNTHESIS.md.
 
 Перед работой:
-- Не выводить .env и секреты.
-- После изменений запускать python -m pytest.
-- Если трогаешь Docker, проверять docker compose config --quiet.
+- Не выводить .env, токены, ключи в чат.
+- После изменений python-кода запускать python -m pytest -p no:schemathesis.
+- После изменений n8n workflow: docker compose exec n8n n8n import:workflow --input=/workflows/hr-legal-rag-workflow.json --projectId=AAx39VT08WENfUYU + update:workflow --active=true + docker compose up -d --force-recreate n8n.
+- Перед TG-смоком проверить, жив ли cloudflare tunnel: curl ${N8N_WEBHOOK_URL}healthz должен вернуть 200. Если 000 — пересоздать tunnel по docs/demo-runbook.md «Локальный Telegram Webhook».
 ```
 
 ## Минимальные команды
 
 ```powershell
 cd D:\TestRag
-python -m pytest -p no:schemathesis
+python -m pytest -p no:schemathesis  # 32 passed
 docker compose config --quiet
-docker compose up --build
+docker compose up -d
+curl http://localhost:8000/health    # ожидается chunk_count=207
 ```
 
-Если `docker compose up --build` падает на подключении к `dockerDesktopLinuxEngine`, сначала запустить Docker Desktop.
+## Если кнопки feedback не приходят в TG
+
+Root cause уже исправлен в `9564ecb`: `replyMarkup` + `inlineKeyboard` должны быть в top-level `parameters` Send Answer, не в `additionalFields`. Если регрессия повторится после правки workflow:
+
+```powershell
+docker compose exec -T postgres psql -U testrag -d testrag -tA -c "select n->'parameters'->>'replyMarkup' from n8n.workflow_entity, jsonb_array_elements(nodes::jsonb) n where id='testrag-hr-legal-assistant' and n->>'name'='Send Answer';"
+```
+
+Ожидаемо: `inlineKeyboard`. Если пусто или null — `replyMarkup` опять забрался в `additionalFields`.
+
+## Если cloudflare tunnel умер
+
+`docker logs testrag-cloudflared` пусто или контейнер не запущен → URLs эфемерные. Процедура восстановления — `docs/demo-runbook.md` раздел «Локальный Telegram Webhook» (6 шагов: rm контейнера → новый run → grep URL → заменить N8N_WEBHOOK_URL → recreate n8n → verify webhook).
