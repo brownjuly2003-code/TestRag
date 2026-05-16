@@ -1,0 +1,120 @@
+# Demo Runbook
+
+## Цель
+
+Показать MVP-поток: вопрос в Telegram, обработка в n8n, запрос в RAG API, ответ с источниками и оценка ответа.
+
+## Подготовка
+
+1. Перевыпустить Telegram token в BotFather, если старый токен где-либо публиковался.
+2. Скопировать `.env.example` в `.env`.
+3. Заполнить `TELEGRAM_BOT_TOKEN`, `ALLOWED_TELEGRAM_USER_IDS`, при наличии `MISTRAL_API_KEY`.
+4. Запустить Docker Desktop.
+5. Запустить сервисы:
+
+```powershell
+docker compose up --build
+```
+
+6. Открыть n8n: `http://localhost:5678`.
+7. Импортировать workflow `n8n/workflows/hr-legal-rag-workflow.json`.
+8. Создать Telegram credentials в n8n UI.
+
+## Импорт n8n Через CLI
+
+Если n8n уже запущен в Docker Compose, workflow и Telegram credential можно импортировать без UI.
+Команды не должны печатать `TELEGRAM_BOT_TOKEN`.
+
+```powershell
+docker compose exec -T n8n n8n import:workflow --input=/workflows/hr-legal-rag-workflow.json --projectId=<project_id>
+docker compose exec -T n8n n8n update:workflow --id=testrag-hr-legal-assistant --active=true
+docker compose up -d --force-recreate n8n
+```
+
+`project_id` можно посмотреть в Postgres:
+
+```powershell
+@'
+select id, name, type from n8n.project;
+'@ | docker compose exec -T postgres psql -U testrag -d testrag
+```
+
+Credential `telegramApi` должен называться `TestRag Telegram Bot` и иметь id `testrag-telegram-api`.
+
+## Локальный Telegram Webhook
+
+Telegram не отправляет webhook на `localhost`. Для live-demo нужен публичный HTTPS tunnel:
+
+- Cloudflare Tunnel;
+- ngrok;
+- другой временный HTTPS endpoint.
+
+После получения HTTPS URL записать его в `.env`:
+
+```env
+N8N_WEBHOOK_URL=https://your-tunnel-url/
+```
+
+Затем перезапустить n8n:
+
+```powershell
+docker compose up -d n8n
+```
+
+Для быстрого временного tunnel можно использовать Cloudflare Tunnel в Docker:
+
+```powershell
+docker run -d --name testrag-cloudflared --network testrag_default cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://n8n:5678
+docker logs testrag-cloudflared
+```
+
+В логах найти URL вида `https://...trycloudflare.com`, записать его в `N8N_WEBHOOK_URL` и перезапустить n8n.
+
+## Whitelist Telegram
+
+Пустой `ALLOWED_TELEGRAM_USER_IDS` не открывает доступ всем. Бот ответит пользователю его Telegram ID и попросит добавить этот ID в `.env`.
+
+После обновления `.env`:
+
+```powershell
+docker compose up -d --force-recreate n8n
+```
+
+Проверить, что webhook установлен:
+
+```powershell
+# Не выводить token в консоль. Проверять только host, pending_update_count и last_error_message.
+```
+
+## Проверка RAG API без Telegram
+
+```powershell
+Invoke-RestMethod -Uri 'http://localhost:8000/health'
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'application/json' -Body '{"question":"Что говорит статья 70 ТК РФ про испытание?"}'
+```
+
+Ожидаемо:
+
+- `refused=false` для вопроса по демо-документам;
+- `sources` содержит файл и score;
+- `confidence` выше `MIN_CONFIDENCE`.
+
+## Проверка отказа
+
+```powershell
+Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/ask' -ContentType 'application/json' -Body '{"question":"Какие правила перевозки лития морем?"}'
+```
+
+Ожидаемо:
+
+- `refused=true`;
+- ответ сообщает, что источников недостаточно.
+
+## Что показать заказчику
+
+- n8n execution trace по вопросу;
+- ответ бота в Telegram;
+- наличие whitelist-проверки;
+- ответ с источниками и confidence;
+- отказ при вопросе вне базы;
+- SQL-схему для логов, feedback и review queue.

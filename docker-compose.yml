@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-testrag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local}
+      POSTGRES_DB: ${POSTGRES_DB:-testrag}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-testrag} -d ${POSTGRES_DB:-testrag}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rag-api:
+    build:
+      context: ./rag-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-testrag}:${POSTGRES_PASSWORD:-change-me-local}@postgres:5432/${POSTGRES_DB:-testrag}
+      DOCS_PATH: ${DOCS_PATH:-/app/data/sample_docs}
+      MIN_CONFIDENCE: ${MIN_CONFIDENCE:-0.35}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      MISTRAL_CHAT_MODEL: ${MISTRAL_CHAT_MODEL:-mistral-small-latest}
+      MISTRAL_EMBEDDING_MODEL: ${MISTRAL_EMBEDDING_MODEL:-mistral-embed}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/sample_docs:/app/data/sample_docs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-testrag}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-testrag}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local}
+      DB_POSTGRESDB_SCHEMA: n8n
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-me-32-characters-minimum}
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      RAG_API_URL: ${RAG_API_URL:-http://rag-api:8000}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      ALLOWED_TELEGRAM_USER_IDS: ${ALLOWED_TELEGRAM_USER_IDS:-}
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rag-api:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  n8n_data:

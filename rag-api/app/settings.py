@@ -1,0 +1,30 @@
+from dataclasses import dataclass
+from functools import lru_cache
+import os
+from pathlib import Path
+
+
+def _default_docs_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "data" / "sample_docs"
+
+
+@dataclass(frozen=True)
+class Settings:
+    docs_path: Path
+    min_confidence: float
+    database_url: str
+    mistral_api_key: str
+    mistral_chat_model: str
+    mistral_embedding_model: str
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings(
+        docs_path=Path(os.getenv("DOCS_PATH", str(_default_docs_path()))),
+        min_confidence=float(os.getenv("MIN_CONFIDENCE", "0.35")),
+        database_url=os.getenv("DATABASE_URL", ""),
+        mistral_api_key=os.getenv("MISTRAL_API_KEY", ""),
+        mistral_chat_model=os.getenv("MISTRAL_CHAT_MODEL", "mistral-small-latest"),
+        mistral_embedding_model=os.getenv("MISTRAL_EMBEDDING_MODEL", "mistral-embed"),
+    )
