@@ -1,5 +1,9 @@
 # Relative to DOCS_PATH=/app/corpus.
 # Keep this list small enough for demo reindexing and Mistral embedding costs.
+01_hr_pol_attendance.md
+01_hr_pol_safety.md
+01_hr_pol_training.md
+01_hr_pol_business_trip.md
 01_hr_pol_leave.md
 01_hr_pol_salary.md
 01_hr_pol_remote_work.md
@@ -35,6 +39,8 @@
 06_comp_policy_pdp.md
 06_comp_policy_commercial_secret.md
 06_comp_policy_incident_response.md
+06_comp_policy_data_retention.md
 07_faq_probation.md
 07_faq_contract_templates.md
 07_faq_pdp.md
+07_faq_dismissal.md

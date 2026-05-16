@@ -192,7 +192,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const sources = ($json.sources || []).map((s, i) => `${i + 1}. ${s.file || s.chunk_id} (${s.section || 'раздел не указан'}, score ${s.score})`).join('\\n');\nconst text = `${$json.answer}\\n\\nConfidence: ${$json.confidence}\\n${sources ? `\\nИсточники:\\n${sources}` : ''}`;\nreturn [{ json: { chat_id: $node['Whitelist'].json.chat_id, text, request_log_id: $json.request_log_id || '' } }];"
+        "jsCode": "const escapeUnderscores = (s) => String(s == null ? '' : s).replace(/_/g, '\\_');\nconst seenFiles = new Set();\nconst dedupedSources = [];\nfor (const s of ($json.sources || [])) {\n  const file = s.file || s.chunk_id || '';\n  if (file && seenFiles.has(file)) continue;\n  seenFiles.add(file);\n  dedupedSources.push(s);\n}\nconst sources = dedupedSources.map((s, i) => {\n  const file = escapeUnderscores(s.file || s.chunk_id || 'unknown');\n  const section = escapeUnderscores(s.section || 'раздел не указан');\n  return `${i + 1}. ${file} (${section}, score ${s.score})`;\n}).join('\n');\nconst text = `${$json.answer}\n\nConfidence: ${$json.confidence}\n${sources ? `\nИсточники:\n${sources}` : ''}`;\nreturn [{ json: { chat_id: $node['Whitelist'].json.chat_id, text, request_log_id: $json.request_log_id || '' } }];"
       },
       "id": "format-answer",
       "name": "Format Answer",
