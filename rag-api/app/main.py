@@ -64,6 +64,44 @@ class FeedbackRequest(BaseModel):
     telegram_user_id: str | None = None
     rating: str
     comment: str | None = None
+    category: str | None = None
+    free_text: str | None = None
+
+
+class HistoryItem(BaseModel):
+    id: str
+    question: str
+    answer: str | None = None
+    confidence: float | None = None
+    refused: bool
+    created_at: str | None = None
+
+
+class HistoryResponse(BaseModel):
+    items: list[HistoryItem]
+
+
+class CorpusCategory(BaseModel):
+    category: str
+    label: str
+    doc_count: int
+
+
+class CorpusSummaryResponse(BaseModel):
+    categories: list[CorpusCategory]
+    total_docs: int
+
+
+CORPUS_CATEGORY_LABELS: dict[str, str] = {
+    "01_hr_pol": "HR — политики и регламенты",
+    "02_hr_tpl": "HR — шаблоны кадровых документов",
+    "03_legal_con": "Legal — договоры",
+    "04_legal_cla": "Legal — претензии и иски",
+    "05_tlog": "T&L — транспорт и логистика",
+    "06_comp": "Compliance — комплаенс",
+    "07_faq": "FAQ — частые вопросы",
+    "other": "Прочее",
+}
 
 
 class RequiredField(BaseModel):
@@ -625,13 +663,43 @@ def feedback(request: FeedbackRequest) -> dict[str, str]:
         telegram_user_id=request.telegram_user_id,
         rating=request.rating,
         comment=request.comment,
+        category=request.category,
+        free_text=request.free_text,
     )
     if request.rating == "bad":
         runtime.store.enqueue_review(
             request_log_id=request.request_log_id,
-            reason=request.comment or "bad_feedback",
+            reason=request.category or request.comment or "bad_feedback",
         )
     return {"status": "accepted"}
+
+
+@app.get("/history", response_model=HistoryResponse)
+def history(telegram_user_id: str, limit: int = 5) -> HistoryResponse:
+    if not telegram_user_id:
+        raise HTTPException(status_code=400, detail="telegram_user_id required")
+    limit = max(1, min(limit, 20))
+    runtime = get_runtime()
+    items = runtime.store.recent_requests(telegram_user_id=telegram_user_id, limit=limit)
+    return HistoryResponse(items=[HistoryItem(**row) for row in items])
+
+
+@app.get("/docs/summary", response_model=CorpusSummaryResponse)
+def docs_summary() -> CorpusSummaryResponse:
+    runtime = get_runtime()
+    rows = runtime.store.corpus_summary()
+    categories = [
+        CorpusCategory(
+            category=row["category"],
+            label=CORPUS_CATEGORY_LABELS.get(row["category"], row["category"]),
+            doc_count=row["doc_count"],
+        )
+        for row in rows
+    ]
+    return CorpusSummaryResponse(
+        categories=categories,
+        total_docs=sum(c.doc_count for c in categories),
+    )
 
 
 @app.post("/document/type-detection", response_model=DocumentTypeResponse)

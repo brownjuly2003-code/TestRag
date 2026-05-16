@@ -161,7 +161,8 @@ def test_direct_reply_routes_without_rag_call():
     assert workflow["connections"]["Feedback?"]["main"][1][0]["node"] == "Bad Clarify?"
     assert workflow["connections"]["Bad Clarify?"]["main"][1][0]["node"] == "Direct Reply?"
     assert workflow["connections"]["Direct Reply?"]["main"][0][0]["node"] == "Send Direct Reply"
-    assert workflow["connections"]["Direct Reply?"]["main"][1][0]["node"] == "Send Typing"
+    assert workflow["connections"]["Direct Reply?"]["main"][1][0]["node"] == "History?"
+    assert workflow["connections"]["Docs?"]["main"][1][0]["node"] == "Send Typing"
     assert workflow["connections"]["Send Typing"]["main"][0][0]["node"] == "Ask RAG API"
 
 
@@ -276,3 +277,148 @@ def test_format_answer_html_escapes_user_content():
     text = result["text"]
     assert "<script>" not in text
     assert "&lt;script&gt;" in text
+
+
+def test_format_answer_converts_markdown_to_html():
+    """Mistral возвращает Markdown V1 (**bold**, `code`, - list).
+    Format Answer обязан конвертировать перед отдачей в TG (parse_mode=HTML)."""
+    result = _run_format_answer(
+        {
+            "answer": "**Ответ:** это **controlled zone**.\n- AWB\n- ULD\nПример `controlled_zone_access`.",
+            "request_log_id": "rl",
+            "sources": [],
+        }
+    )
+    text = result["text"]
+    assert "<b>Ответ:</b>" in text
+    assert "<b>controlled zone</b>" in text
+    assert "**" not in text
+    assert "<code>controlled_zone_access</code>" in text
+    assert "• AWB" in text
+    assert "• ULD" in text
+
+
+def test_help_command_returns_direct_reply_with_html_help_text():
+    body = _run_whitelist({"message": {"text": "/help", "chat": {"id": 42}, "from": {"id": 42}}})
+    assert body["event_type"] == "direct_reply"
+    assert "<b>" in body["text"]
+    assert "/history" in body["text"]
+    assert "/docs" in body["text"]
+
+
+def test_clear_command_returns_direct_reply_with_state_explanation():
+    body = _run_whitelist({"message": {"text": "/clear", "chat": {"id": 42}, "from": {"id": 42}}})
+    assert body["event_type"] == "direct_reply"
+    assert "не сохраняется" in body["text"].lower() or "состояние" in body["text"].lower()
+
+
+def test_history_command_sets_history_request_event_type():
+    body = _run_whitelist({"message": {"text": "/history", "chat": {"id": 42}, "from": {"id": 42}}})
+    assert body["event_type"] == "history_request"
+
+
+def test_docs_command_sets_docs_request_event_type():
+    body = _run_whitelist({"message": {"text": "/docs", "chat": {"id": 42}, "from": {"id": 42}}})
+    assert body["event_type"] == "docs_request"
+
+
+def test_workflow_has_history_and_docs_branches():
+    workflow = _load_workflow()
+    nodes = {n["name"]: n for n in workflow["nodes"]}
+    for required in ["History?", "Docs?", "Fetch History", "Format History", "Fetch Docs", "Format Docs"]:
+        assert required in nodes, f"missing {required}"
+
+    assert workflow["connections"]["Direct Reply?"]["main"][1][0]["node"] == "History?"
+    assert workflow["connections"]["History?"]["main"][0][0]["node"] == "Fetch History"
+    assert workflow["connections"]["History?"]["main"][1][0]["node"] == "Docs?"
+    assert workflow["connections"]["Docs?"]["main"][0][0]["node"] == "Fetch Docs"
+    assert workflow["connections"]["Docs?"]["main"][1][0]["node"] == "Send Typing"
+    assert workflow["connections"]["Format History"]["main"][0][0]["node"] == "Send Direct Reply"
+    assert workflow["connections"]["Format Docs"]["main"][0][0]["node"] == "Send Direct Reply"
+
+
+def test_fetch_history_uses_get_with_whitelist_user_id():
+    nodes = _load_nodes()
+    node = nodes["Fetch History"]
+    assert node["parameters"]["method"] == "GET"
+    assert "/history" in node["parameters"]["url"]
+    assert "$node['Whitelist'].json.user_id" in node["parameters"]["url"] or '$node["Whitelist"].json.user_id' in node["parameters"]["url"]
+
+
+def test_fetch_docs_uses_get_summary_endpoint():
+    nodes = _load_nodes()
+    node = nodes["Fetch Docs"]
+    assert node["parameters"]["method"] == "GET"
+    assert "/docs/summary" in node["parameters"]["url"]
+
+
+def test_send_feedback_passes_category_as_dedicated_field():
+    nodes = _load_nodes()
+    body = nodes["Send Feedback"]["parameters"]["jsonBody"]
+    assert "category: $json.category" in body
+    assert "telegram_inline_button" in body
+    assert "category:" not in body.split("category: $json.category")[0]
+
+
+def _run_format(node_name: str, payload: dict, chat_id: int = 42) -> dict:
+    nodes = _load_nodes()
+    code = nodes[node_name]["parameters"]["jsCode"]
+    script = f"""
+const $node = {{ Whitelist: {{ json: {{ chat_id: {chat_id} }} }} }};
+const $json = {json.dumps(payload)};
+const result = new Function('$json', '$node', {json.dumps(code)})($json, $node);
+console.log(JSON.stringify(result[0].json));
+"""
+    result = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
+    return json.loads(result.stdout)
+
+
+def test_format_history_renders_items_with_html_and_plural():
+    result = _run_format("Format History", {
+        "items": [
+            {"question": "Что такое controlled zone?", "refused": False, "created_at": "2026-05-17T01:47:00"},
+            {"question": "AWB обязателен?", "refused": False, "created_at": "2026-05-17T01:30:00"},
+        ],
+    })
+    text = result["text"]
+    assert "Последние 2 запроса" in text
+    assert "<code>Что такое controlled zone?</code>" in text
+
+
+def test_format_history_handles_singular_plural():
+    result = _run_format("Format History", {"items": [{"question": "x", "refused": False, "created_at": "2026-05-17T01:00:00"}]})
+    assert "Последний 1 запрос" in result["text"]
+
+
+def test_format_history_handles_empty():
+    result = _run_format("Format History", {"items": []})
+    assert "пуста" in result["text"]
+
+
+def test_format_docs_renders_categories_with_total():
+    result = _run_format("Format Docs", {
+        "categories": [
+            {"category": "01_hr_pol", "label": "HR — политики", "doc_count": 60},
+            {"category": "07_faq", "label": "FAQ", "doc_count": 8},
+        ],
+        "total_docs": 68,
+    })
+    text = result["text"]
+    assert "Корпус: 68 документов" in text
+    assert "• HR — политики — 60" in text
+    assert "• FAQ — 8" in text
+
+
+def test_format_answer_md_conversion_does_not_re_escape_safe_tags():
+    """XSS-попытка с MD: <script> должен escape'нуться, но **bold** конвертироваться."""
+    result = _run_format_answer(
+        {
+            "answer": "Видел <script>x</script> + **жирный**",
+            "request_log_id": "rl",
+            "sources": [],
+        }
+    )
+    text = result["text"]
+    assert "&lt;script&gt;" in text
+    assert "<b>жирный</b>" in text
+    assert "<script>" not in text

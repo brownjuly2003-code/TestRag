@@ -57,10 +57,10 @@ Updated: 2026-05-17.
 
 ### Sprint 2 — UX uplift (1–2 дня)
 
-- [ ] Команды `/help`, `/clear`, `/history` (последние 5 запросов юзера из `request_logs`).
-- [ ] Расширить `answer_feedback`: добавить `chunk_ids` (jsonb array), `category` (enum), `free_text` (nullable). Привязка feedback к ретривлу.
+- [x] Команды `/help`, `/clear`, `/history` (последние 5 запросов юзера из `request_logs`). 2026-05-17.
+- [x] Расширить `answer_feedback`: добавить `chunk_ids` (jsonb, auto-pulled из request_logs.sources), `category` (text для inaccurate/outdated/human), `free_text` (text nullable). Миграция ALTER TABLE без потери данных. 2026-05-17.
 - [ ] Follow-up question buttons: 2 вопроса на основе top-3 chunks (template-based или короткий Mistral-вызов).
-- [ ] `/docs` — список разделов корпуса (unique categories из frontmatter).
+- [x] `/docs` — список 7 категорий из MVP-корпуса (по prefix file_name, total 48 docs ingested). Endpoint `GET /docs/summary`. 2026-05-17.
 
 ### Sprint 3 — production polish (1–2 дня)
 

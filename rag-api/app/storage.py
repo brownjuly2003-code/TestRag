@@ -155,23 +155,98 @@ class PostgresStore:
         telegram_user_id: str | None,
         rating: str,
         comment: str | None,
+        category: str | None = None,
+        free_text: str | None = None,
     ) -> str | None:
         if not self.enabled:
             return None
 
         with self._connect() as conn:
             cursor = conn.cursor()
+            chunk_ids: list[str] = []
+            if request_log_id:
+                cursor.execute(
+                    "select sources from request_logs where id = %s",
+                    (request_log_id,),
+                )
+                row = cursor.fetchone()
+                if row and row[0]:
+                    chunk_ids = [s.get("chunk_id") for s in row[0] if s.get("chunk_id")]
             cursor.execute(
                 """
                 insert into answer_feedback
-                    (request_log_id, telegram_user_id, rating, comment)
-                values (%s, %s, %s, %s)
+                    (request_log_id, telegram_user_id, rating, comment, category, free_text, chunk_ids)
+                values (%s, %s, %s, %s, %s, %s, %s)
                 returning id::text
                 """,
-                (request_log_id, telegram_user_id, rating, comment),
+                (
+                    request_log_id,
+                    telegram_user_id,
+                    rating,
+                    comment,
+                    category,
+                    free_text,
+                    Jsonb(chunk_ids),
+                ),
             )
             row = cursor.fetchone()
         return row[0] if row else None
+
+    def recent_requests(self, telegram_user_id: str, limit: int = 5) -> list[dict[str, Any]]:
+        if not self.enabled:
+            return []
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                select id::text, question, answer, confidence, refused, created_at
+                from request_logs
+                where telegram_user_id = %s
+                order by created_at desc
+                limit %s
+                """,
+                (telegram_user_id, limit),
+            )
+            rows = cursor.fetchall()
+        return [
+            {
+                "id": row[0],
+                "question": row[1],
+                "answer": row[2],
+                "confidence": float(row[3]) if row[3] is not None else None,
+                "refused": row[4],
+                "created_at": row[5].isoformat() if row[5] else None,
+            }
+            for row in rows
+        ]
+
+    def corpus_summary(self) -> list[dict[str, Any]]:
+        if not self.enabled:
+            return []
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                select
+                    case
+                        when file_name ~ '^[0-9]+_hr_pol' then '01_hr_pol'
+                        when file_name ~ '^[0-9]+_hr_(tmp|tpl)' then '02_hr_tpl'
+                        when file_name ~ '^[0-9]+_legal_con' then '03_legal_con'
+                        when file_name ~ '^[0-9]+_legal_cla' then '04_legal_cla'
+                        when file_name ~ '^[0-9]+_tlog' then '05_tlog'
+                        when file_name ~ '^[0-9]+_comp' then '06_comp'
+                        when file_name ~ '^[0-9]+_faq' then '07_faq'
+                        else 'other'
+                    end as category,
+                    count(distinct d.id) as doc_count
+                from documents d
+                join document_chunks c on c.document_id = d.id
+                group by 1
+                order by 1
+                """
+            )
+            rows = cursor.fetchall()
+        return [{"category": row[0], "doc_count": int(row[1])} for row in rows]
 
     def enqueue_review(self, request_log_id: str | None, reason: str) -> str | None:
         if not self.enabled or not request_log_id:

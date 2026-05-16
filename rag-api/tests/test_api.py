@@ -53,6 +53,11 @@ class FakeStore:
         self.request_logs = []
         self.feedback = []
         self.review_queue = []
+        self.history_calls: list[dict] = []
+        self.corpus_summary_rows: list[dict] = [
+            {"category": "01_hr_pol", "doc_count": 60},
+            {"category": "07_faq", "doc_count": 8},
+        ]
 
     def ingest_documents(self, docs_path, embedding_client) -> int:
         return 0
@@ -71,6 +76,22 @@ class FakeStore:
     def enqueue_review(self, **kwargs):
         self.review_queue.append(kwargs)
         return "review-1"
+
+    def recent_requests(self, telegram_user_id, limit=5):
+        self.history_calls.append({"telegram_user_id": telegram_user_id, "limit": limit})
+        return [
+            {
+                "id": "rl-1",
+                "question": "Что такое controlled zone?",
+                "answer": "Зона аэропорта...",
+                "confidence": 0.42,
+                "refused": False,
+                "created_at": "2026-05-17T01:47:00+00:00",
+            }
+        ]
+
+    def corpus_summary(self):
+        return self.corpus_summary_rows
 
 
 class FakeDocumentPlanner:
@@ -196,6 +217,70 @@ def test_bad_feedback_is_written_to_review_queue(monkeypatch):
     assert response.json()["status"] == "accepted"
     assert store.feedback[0]["rating"] == "bad"
     assert store.review_queue[0]["request_log_id"] == "request-1"
+
+
+def test_feedback_accepts_category_and_free_text(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/feedback",
+            json={
+                "request_log_id": "request-1",
+                "telegram_user_id": "42",
+                "rating": "bad",
+                "comment": "telegram_inline_button",
+                "category": "inaccurate",
+                "free_text": None,
+            },
+        )
+
+    assert response.status_code == 200
+    written = store.feedback[0]
+    assert written["category"] == "inaccurate"
+    assert written["rating"] == "bad"
+    assert store.review_queue[0]["reason"] == "inaccurate"
+
+
+def test_history_endpoint_returns_recent_requests(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/history", params={"telegram_user_id": "42", "limit": 5})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["items"][0]["question"] == "Что такое controlled zone?"
+    assert body["items"][0]["confidence"] == 0.42
+    assert store.history_calls[0] == {"telegram_user_id": "42", "limit": 5}
+
+
+def test_history_endpoint_clamps_limit(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        client.get("/history", params={"telegram_user_id": "42", "limit": 500})
+
+    assert store.history_calls[0]["limit"] == 20
+
+
+def test_docs_summary_endpoint_groups_by_category(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/docs/summary")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_docs"] == 68
+    labels = {c["category"]: c["label"] for c in body["categories"]}
+    assert labels["01_hr_pol"] == "HR — политики и регламенты"
+    assert labels["07_faq"] == "FAQ — частые вопросы"
 
 
 def test_document_type_detection_returns_missing_fields(monkeypatch):

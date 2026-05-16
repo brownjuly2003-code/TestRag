@@ -52,6 +52,10 @@ create table if not exists answer_feedback (
     created_at timestamptz not null default now()
 );
 
+alter table answer_feedback add column if not exists category text;
+alter table answer_feedback add column if not exists free_text text;
+alter table answer_feedback add column if not exists chunk_ids jsonb not null default '[]'::jsonb;
+
 create table if not exists review_queue (
     id uuid primary key default gen_random_uuid(),
     request_log_id uuid references request_logs(id) on delete cascade,
