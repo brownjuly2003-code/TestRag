@@ -8,3 +8,4 @@ venv/
 htmlcov/
 n8n/.n8n/
 data/generated/
+.tmp/

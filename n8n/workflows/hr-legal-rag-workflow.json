@@ -221,30 +221,36 @@
         "chatId": "={{ $json.chat_id }}",
         "text": "={{ $json.text }}",
         "additionalFields": {
-          "appendAttribution": false,
-          "replyMarkup": "inlineKeyboard",
-          "inlineKeyboard": {
-            "rows": [
-              {
-                "row": {
-                  "buttons": [
-                    {
-                      "text": "Good",
-                      "additionalFields": {
-                        "callback_data": "={{ 'feedback:good:' + ($json.request_log_id || '') }}"
-                      }
-                    },
-                    {
-                      "text": "Bad",
-                      "additionalFields": {
-                        "callback_data": "={{ 'feedback:bad:' + ($json.request_log_id || '') }}"
-                      }
+          "appendAttribution": false
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "👍 Полезно",
+                    "additionalFields": {
+                      "callback_data": "={{ 'feedback:good:' + ($json.request_log_id || '') }}"
                     }
-                  ]
-                }
+                  },
+                  {
+                    "text": "👎 Неточно",
+                    "additionalFields": {
+                      "callback_data": "={{ 'feedback:bad:' + ($json.request_log_id || '') }}"
+                    }
+                  },
+                  {
+                    "text": "📋 Нужны источники",
+                    "additionalFields": {
+                      "callback_data": "={{ 'feedback:sources:' + ($json.request_log_id || '') }}"
+                    }
+                  }
+                ]
               }
-            ]
-          }
+            }
+          ]
         }
       },
       "id": "send-answer",
