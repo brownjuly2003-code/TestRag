@@ -8,6 +8,78 @@ from typing import Any
 
 
 TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9]+", re.UNICODE)
+STOP_WORDS = {
+    "а",
+    "без",
+    "в",
+    "во",
+    "для",
+    "до",
+    "если",
+    "и",
+    "или",
+    "как",
+    "какая",
+    "какие",
+    "какой",
+    "какую",
+    "когда",
+    "ли",
+    "может",
+    "можно",
+    "на",
+    "не",
+    "нужен",
+    "нужна",
+    "нужно",
+    "нужны",
+    "о",
+    "об",
+    "от",
+    "по",
+    "при",
+    "про",
+    "с",
+    "со",
+    "что",
+}
+RUSSIAN_SUFFIXES = (
+    "иями",
+    "ями",
+    "ого",
+    "ему",
+    "ому",
+    "ыми",
+    "ими",
+    "ая",
+    "ее",
+    "ие",
+    "ий",
+    "ия",
+    "ой",
+    "ом",
+    "ым",
+    "ых",
+    "ые",
+    "ам",
+    "ах",
+    "ев",
+    "ей",
+    "ем",
+    "ие",
+    "ию",
+    "ия",
+    "ов",
+    "ям",
+    "ях",
+    "а",
+    "е",
+    "и",
+    "о",
+    "у",
+    "ы",
+    "я",
+)
 
 
 @dataclass(frozen=True)
@@ -36,7 +108,24 @@ class AnswerPolicy:
 
 
 def tokenize(text: str) -> list[str]:
-    return [token.lower() for token in TOKEN_RE.findall(text) if len(token) > 1]
+    tokens = []
+    for raw_token in TOKEN_RE.findall(text):
+        token = raw_token.lower().replace("ё", "е")
+        if len(token) <= 1 or token in STOP_WORDS:
+            continue
+        normalized = _normalize_token(token)
+        if len(normalized) > 1 and normalized not in STOP_WORDS:
+            tokens.append(normalized)
+    return tokens
+
+
+def _normalize_token(token: str) -> str:
+    if token.isascii() or token.isdigit() or len(token) <= 4:
+        return token
+    for suffix in RUSSIAN_SUFFIXES:
+        if token.endswith(suffix) and len(token) - len(suffix) >= 4:
+            return token[: -len(suffix)]
+    return token
 
 
 def cosine_similarity(left: list[float], right: list[float]) -> float:
@@ -85,7 +174,7 @@ class HybridRetriever:
                 vector_score = (cosine_similarity(query_embedding or [], chunk.embedding) + 1) / 2
             coverage = len(query_terms.intersection(self.term_frequencies[index])) / len(query_terms)
             base_score = (0.65 * normalized_bm25 + 0.35 * vector_score) if has_vector else normalized_bm25
-            final_score = base_score * coverage
+            final_score = base_score * coverage * coverage
             results.append(
                 SearchResult(
                     chunk=chunk,
@@ -127,8 +216,8 @@ class HybridRetriever:
 def confidence_from_results(results: list[SearchResult]) -> float:
     if not results:
         return 0.0
-    positive_sources = sum(1 for result in results if result.final_score > 0)
-    source_bonus = min(0.15, positive_sources * 0.05)
+    strong_sources = sum(1 for result in results if result.final_score >= 0.35)
+    source_bonus = min(0.1, strong_sources * 0.025)
     return min(1.0, results[0].final_score + source_bonus)
 
 

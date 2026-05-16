@@ -14,7 +14,7 @@ LLM используется для поиска, классификации и 
 
 - индексация 3-50 открытых документов;
 - один внешний источник в юридическом или HR-сегменте;
-- хранение чанков и embeddings в Supabase `pgvector`;
+- хранение чанков и embeddings в Postgres/pgvector;
 - hybrid retrieval: vector search + BM25;
 - RAG-ответы с источниками и порогом уверенности;
 - генерация черновика по 1-2 шаблонам;
@@ -44,7 +44,7 @@ n8n используется как оркестратор бизнес-проц
 | --- | --- |
 | n8n | Маршрутизация workflow, Telegram, логирование, кнопки оценки, вызовы API |
 | RAG API | Классификация, BM25, hybrid search, скоринг, генерация ответа с источниками |
-| Supabase | `pgvector`, документы, чанки, логи, оценки, очередь ревью |
+| Postgres/pgvector | документы, чанки, embeddings, логи, оценки, очередь ревью |
 | Mistral | LLM для классификации, ответа и embeddings |
 | Telegram bot | Пользовательский интерфейс и whitelist-доступ |
 
@@ -63,6 +63,15 @@ TELEGRAM_BOT_TOKEN=новый_токен_после_revoke
 ALLOWED_TELEGRAM_USER_IDS=telegram_user_id_через_запятую
 MISTRAL_API_KEY=
 ```
+
+Для расширенного MVP-корпуса вместо минимального `data/sample_docs` можно включить manifest mode:
+
+```env
+DOCS_PATH=/app/corpus
+DOCS_MANIFEST_PATH=/app/manifests/MVP_CORPUS_FILES.txt
+```
+
+Manifest ограничивает индексацию выбранными файлами из `corpus/`, чтобы не отправлять все 200 документов на embeddings при случайном рестарте.
 
 3. Поднять сервисы:
 
@@ -108,6 +117,8 @@ TestRag/
   docker-compose.yml
   sql/init.sql
   data/sample_docs/
+  corpus/
+  manifests/MVP_CORPUS_FILES.txt
   docs/demo-runbook.md
   docs/legal-document-prompts.md
   docs/next-session.md
@@ -124,12 +135,18 @@ TestRag/
 
 ## Текущий статус реализации
 
+Updated: 2026-05-16.
+
 - Добавлен RAG API на FastAPI.
 - Добавлен BM25 retriever и policy отказа при низкой уверенности.
 - Добавлены стартовые демо-документы.
 - Добавлен Docker Compose для n8n, Postgres/pgvector и RAG API.
 - Добавлена SQL-схема для документов, чанков, логов, feedback и очереди ревью.
 - Добавлен импортируемый n8n workflow для Telegram -> whitelist -> RAG API -> ответ.
+- Исправлена маршрутизация IF-веток в n8n workflow: whitelist-пользователь идет в RAG API, feedback-кнопки идут в `/feedback`, denied-ветка остается только для неавторизованных.
+- Добавлен manifest mode для безопасной индексации MVP-подборки из `corpus/`.
+- Текущий расширенный MVP-корпус: `DOCS_PATH=/app/corpus`, `DOCS_MANIFEST_PATH=/app/manifests/MVP_CORPUS_FILES.txt`, `/health` показывает `chunk_count=122`.
+- Тесты: `python -m pytest -p no:schemathesis` -> `15 passed`.
 - Mistral подключается через env. Если `MISTRAL_API_KEY` пустой, API возвращает grounded extractive answer по найденным источникам.
 
 ## Архитектура
@@ -142,13 +159,13 @@ flowchart LR
     Auth --> RagApi[RAG API]
     RagApi --> Classifier[Классификация запроса]
     RagApi --> Retriever[Hybrid search: vector + BM25]
-    Retriever --> Supabase[(Supabase pgvector)]
+    Retriever --> Pg[(Postgres pgvector)]
     RagApi --> LLM[Mistral]
     LLM --> RagApi
     RagApi --> N8N
     N8N --> Tg
     Tg --> User
-    N8N --> Logs[(Supabase logs)]
+    N8N --> Logs[(Postgres logs)]
     User --> Feedback[Оценка ответа]
     Feedback --> N8N
     N8N --> Review[Очередь ревью]
@@ -184,7 +201,7 @@ flowchart LR
         Refuse[Отказывает без достаточных источников]
     end
 
-    subgraph Storage["Supabase"]
+    subgraph Storage["Postgres/pgvector"]
         Vectors[(pgvector)]
         Logs[(logs)]
         Reviews[(review_queue)]
@@ -210,7 +227,7 @@ flowchart LR
 
 - `TokenTextSplitter(chunk_size=500, chunk_overlap=50)`;
 - embeddings для каждого чанка;
-- хранение в Supabase `pgvector`;
+- хранение в Postgres/pgvector;
 - обязательная метаинформация: `file`, `section`, `date`, `source_url`, `document_type`.
 
 Поиск в MVP делается гибридным:
@@ -219,7 +236,7 @@ flowchart LR
 - BM25/full-text search для точных юридических формулировок, терминов, номеров статей и названий документов;
 - объединение результатов через rerank/score merge перед генерацией ответа.
 
-Для MVP BM25 можно считать в RAG API по корпусу проиндексированных чанков. Supabase при этом остается источником текстов, embeddings и метаданных. Если в выбранном окружении нет BM25-расширения для Postgres, обычный PostgreSQL full-text search используется только как fallback, а не как полный эквивалент BM25.
+Для MVP BM25 можно считать в RAG API по корпусу проиндексированных чанков. Postgres/pgvector при этом остается источником текстов, embeddings и метаданных. Если в выбранном окружении нет BM25-расширения для Postgres, обычный PostgreSQL full-text search используется только как fallback, а не как полный эквивалент BM25.
 
 Минимальная схема таблиц:
 
@@ -267,6 +284,8 @@ SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 N8N_WEBHOOK_SECRET=
 ALLOWED_TELEGRAM_USER_IDS=
+DOCS_PATH=/app/data/sample_docs
+DOCS_MANIFEST_PATH=
 ```
 
 ## Безопасность

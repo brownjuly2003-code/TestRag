@@ -291,12 +291,12 @@ def detect_section(text: str) -> str | None:
     return None
 
 
-def load_sample_chunks(docs_path: Path) -> list[DocumentChunk]:
+def load_sample_chunks(docs_path: Path, manifest_path: Path | None = None) -> list[DocumentChunk]:
     if not docs_path.exists():
         return []
 
     chunks: list[DocumentChunk] = []
-    for file_path in sorted(docs_path.glob("*.md")):
+    for file_path in _iter_document_files(docs_path, manifest_path):
         text = file_path.read_text(encoding="utf-8")
         section = detect_section(text)
         for index, chunk_text in enumerate(split_text(text)):
@@ -316,6 +316,31 @@ def load_sample_chunks(docs_path: Path) -> list[DocumentChunk]:
     return chunks
 
 
+def _iter_document_files(docs_path: Path, manifest_path: Path | None = None) -> list[Path]:
+    if not manifest_path:
+        return sorted(docs_path.glob("*.md"))
+    if not manifest_path.exists():
+        return []
+
+    root_path = docs_path.resolve()
+    files = []
+    seen = set()
+    for line in manifest_path.read_text(encoding="utf-8").splitlines():
+        entry = line.strip()
+        if not entry or entry.startswith("#"):
+            continue
+        file_path = (root_path / entry).resolve()
+        if file_path in seen:
+            continue
+        if file_path.suffix.lower() != ".md" or not file_path.is_file():
+            continue
+        if not file_path.is_relative_to(root_path):
+            continue
+        files.append(file_path)
+        seen.add(file_path)
+    return files
+
+
 @lru_cache
 def get_runtime() -> Runtime:
     settings = get_settings()
@@ -323,10 +348,10 @@ def get_runtime() -> Runtime:
     embeddings = MistralEmbeddingClient(settings.mistral_api_key, settings.mistral_embedding_model)
     store = PostgresStore(settings.database_url)
     if store.enabled:
-        store.ingest_documents(settings.docs_path, embeddings)
+        store.ingest_documents(settings.docs_path, embeddings, settings.docs_manifest_path)
     chunks = store.load_chunks() if store.enabled else []
     if not chunks:
-        chunks = load_sample_chunks(settings.docs_path)
+        chunks = load_sample_chunks(settings.docs_path, settings.docs_manifest_path)
     return Runtime(
         chunks=chunks,
         retriever=HybridRetriever(chunks),
@@ -546,6 +571,11 @@ async def ask(request: AskRequest) -> AskResponse:
     else:
         mistral_answer = await runtime.llm.answer(request.question, results)
         answer = mistral_answer or build_grounded_answer(request.question, results)
+        if mistral_answer and mistral_answer.strip().lower().startswith(
+            ("данных недостаточно", "не хватает", "не нашел", "не нашёл")
+        ):
+            refused = True
+            confidence = 0.0
 
     request_log_id = runtime.store.log_request(
         telegram_user_id=request.telegram_user_id,

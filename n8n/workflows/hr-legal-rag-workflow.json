@@ -253,14 +253,14 @@
       "main": [
         [
           {
-            "node": "Send Denied",
+            "node": "Feedback?",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Feedback?",
+            "node": "Send Denied",
             "type": "main",
             "index": 0
           }
@@ -271,14 +271,14 @@
       "main": [
         [
           {
-            "node": "Ask RAG API",
+            "node": "Send Feedback",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Send Feedback",
+            "node": "Ask RAG API",
             "type": "main",
             "index": 0
           }

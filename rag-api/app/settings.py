@@ -11,6 +11,7 @@ def _default_docs_path() -> Path:
 @dataclass(frozen=True)
 class Settings:
     docs_path: Path
+    docs_manifest_path: Path | None
     min_confidence: float
     database_url: str
     mistral_api_key: str
@@ -20,8 +21,10 @@ class Settings:
 
 @lru_cache
 def get_settings() -> Settings:
+    docs_manifest_path = os.getenv("DOCS_MANIFEST_PATH", "").strip()
     return Settings(
         docs_path=Path(os.getenv("DOCS_PATH", str(_default_docs_path()))),
+        docs_manifest_path=Path(docs_manifest_path) if docs_manifest_path else None,
         min_confidence=float(os.getenv("MIN_CONFIDENCE", "0.35")),
         database_url=os.getenv("DATABASE_URL", ""),
         mistral_api_key=os.getenv("MISTRAL_API_KEY", ""),

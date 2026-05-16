@@ -20,6 +20,25 @@ docker compose up --build
 7. Импортировать workflow `n8n/workflows/hr-legal-rag-workflow.json`.
 8. Создать Telegram credentials в n8n UI.
 
+## Корпус Документов
+
+По умолчанию демо использует минимальный корпус `data/sample_docs`.
+
+Для расширенного MVP-корпуса включить manifest mode в `.env`:
+
+```env
+DOCS_PATH=/app/corpus
+DOCS_MANIFEST_PATH=/app/manifests/MVP_CORPUS_FILES.txt
+```
+
+После смены корпуса пересоздать `rag-api`:
+
+```powershell
+docker compose up -d --build --force-recreate rag-api
+```
+
+Manifest ограничивает индексацию выбранными файлами из `corpus/`, чтобы случайно не отправить все 200 документов на embeddings.
+
 ## Импорт n8n Через CLI
 
 Если n8n уже запущен в Docker Compose, workflow и Telegram credential можно импортировать без UI.
@@ -40,6 +59,22 @@ select id, name, type from n8n.project;
 ```
 
 Credential `telegramApi` должен называться `TestRag Telegram Bot` и иметь id `testrag-telegram-api`.
+
+После импорта проверить маршрутизацию IF-веток:
+
+```powershell
+@'
+select
+  connections->'Authorized?'->'main'->0->0->>'node' as authorized_true,
+  connections->'Authorized?'->'main'->1->0->>'node' as authorized_false,
+  connections->'Feedback?'->'main'->0->0->>'node' as feedback_true,
+  connections->'Feedback?'->'main'->1->0->>'node' as feedback_false
+from n8n.workflow_entity
+where id='testrag-hr-legal-assistant';
+'@ | docker compose exec -T postgres psql -U testrag -d testrag
+```
+
+Ожидаемо: `authorized_true=Feedback?`, `authorized_false=Send Denied`, `feedback_true=Send Feedback`, `feedback_false=Ask RAG API`.
 
 ## Локальный Telegram Webhook
 
@@ -85,6 +120,8 @@ docker compose up -d --force-recreate n8n
 ```powershell
 # Не выводить token в консоль. Проверять только host, pending_update_count и last_error_message.
 ```
+
+Если бот отвечает только стандартной n8n-припиской без полезного текста, сначала проверить, что n8n был пересоздан после импорта workflow и что IF-ветки совпадают с ожидаемыми значениями из раздела выше.
 
 ## Проверка RAG API без Telegram
 

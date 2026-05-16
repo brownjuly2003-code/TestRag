@@ -73,6 +73,28 @@ def test_ingestion_writes_chunks_with_mistral_embeddings(monkeypatch):
     assert inserted_count == 1
 
 
+def test_ingestion_uses_manifest_file_list(monkeypatch):
+    Path(".pytest_cache").mkdir(exist_ok=True)
+    with TemporaryDirectory(dir=Path(".pytest_cache")) as temp_dir:
+        root_path = Path(temp_dir)
+        docs_path = root_path / "docs"
+        docs_path.mkdir()
+        (docs_path / "included.md").write_text("# Included\n\nНужный документ.", encoding="utf-8")
+        (docs_path / "skipped.md").write_text("# Skipped\n\nЛишний документ.", encoding="utf-8")
+        manifest_path = root_path / "manifest.txt"
+        manifest_path.write_text("included.md\n", encoding="utf-8")
+        cursor = FakeCursor()
+        store = PostgresStore("postgresql://local/test")
+
+        monkeypatch.setattr(store, "_connect", lambda: FakeConnection(cursor))
+
+        inserted_count = store.ingest_documents(docs_path, FakeEmbeddingClient(), manifest_path=manifest_path)
+
+    assert inserted_count == 1
+    assert len(cursor.inserted_chunks) == 1
+    assert cursor.inserted_chunks[0][2] == "# Included Нужный документ."
+
+
 def _run_ingestion(monkeypatch, docs_path: Path) -> int:
     cursor = FakeCursor()
     store = PostgresStore("postgresql://local/test")

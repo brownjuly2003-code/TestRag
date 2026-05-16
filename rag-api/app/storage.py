@@ -20,14 +20,14 @@ class PostgresStore:
     def _connect(self):
         return psycopg.connect(self.database_url, autocommit=True)
 
-    def ingest_documents(self, docs_path: Path, embedding_client: Any) -> int:
+    def ingest_documents(self, docs_path: Path, embedding_client: Any, manifest_path: Path | None = None) -> int:
         if not self.enabled or not docs_path.exists():
             return 0
 
         inserted_count = 0
         with self._connect() as conn:
             cursor = conn.cursor()
-            for file_path in sorted(docs_path.glob("*.md")):
+            for file_path in _iter_document_files(docs_path, manifest_path):
                 document_id = self._get_or_create_document(cursor, file_path)
                 cursor.execute("select count(*) from document_chunks where document_id = %s", (document_id,))
                 row = cursor.fetchone()
@@ -257,6 +257,31 @@ def _detect_section(text: str) -> str | None:
         if line.startswith("#"):
             return line.strip("# ").strip()
     return None
+
+
+def _iter_document_files(docs_path: Path, manifest_path: Path | None = None) -> list[Path]:
+    if not manifest_path:
+        return sorted(docs_path.glob("*.md"))
+    if not manifest_path.exists():
+        return []
+
+    root_path = docs_path.resolve()
+    files = []
+    seen = set()
+    for line in manifest_path.read_text(encoding="utf-8").splitlines():
+        entry = line.strip()
+        if not entry or entry.startswith("#"):
+            continue
+        file_path = (root_path / entry).resolve()
+        if file_path in seen:
+            continue
+        if file_path.suffix.lower() != ".md" or not file_path.is_file():
+            continue
+        if not file_path.is_relative_to(root_path):
+            continue
+        files.append(file_path)
+        seen.add(file_path)
+    return files
 
 
 def _format_embedding(embedding: list[float] | None) -> str | None:

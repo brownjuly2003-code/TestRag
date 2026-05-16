@@ -55,3 +55,44 @@ def test_hybrid_retriever_does_not_overtrust_single_generic_term_with_embeddings
     )
 
     assert confidence_from_results(results) < 0.35
+
+
+def test_hybrid_retriever_matches_russian_inflected_domain_terms():
+    chunks = [
+        DocumentChunk(
+            chunk_id="hr-template",
+            content="Шаблон содержит обязательные реквизиты работника и условия трудового договора.",
+            metadata={"file": "employment_order.md"},
+        ),
+        DocumentChunk(
+            chunk_id="waybill",
+            content="Порядок оформления путевых листов: путевой лист, водитель, маршрут и обязательные поля рейса.",
+            metadata={"file": "waybill.md"},
+        ),
+    ]
+
+    retriever = HybridRetriever(chunks)
+    results = retriever.search("Какие обязательные реквизиты путевого листа?", top_k=2)
+
+    assert results[0].chunk.chunk_id == "waybill"
+    assert confidence_from_results(results) >= 0.35
+
+
+def test_confidence_stays_low_when_specific_terms_are_missing():
+    chunks = [
+        DocumentChunk(
+            chunk_id="dangerous-goods",
+            content="Правила перевозки опасных грузов автомобильным транспортом по ADR.",
+            metadata={"file": "dangerous_goods.md"},
+        ),
+        DocumentChunk(
+            chunk_id="road-transport",
+            content="Договор автомобильной перевозки груза описывает общие правила перевозки.",
+            metadata={"file": "road_transport.md"},
+        ),
+    ]
+
+    retriever = HybridRetriever(chunks)
+    results = retriever.search("Какие правила перевозки лития морем?", top_k=2)
+
+    assert confidence_from_results(results) < 0.35

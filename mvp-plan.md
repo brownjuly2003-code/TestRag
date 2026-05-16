@@ -2,7 +2,19 @@
 
 ## Goal
 
-Собрать рабочий MVP HR/legal RAG-ассистента: Telegram-вопрос, n8n workflow, hybrid search по Supabase `pgvector` + BM25, ответ через Mistral с источниками, логирование и оценка качества.
+Собрать рабочий MVP HR/legal RAG-ассистента: Telegram-вопрос, n8n workflow, hybrid search по Postgres/pgvector + BM25, ответ через Mistral с источниками, логирование и оценка качества.
+
+## Current Status
+
+Updated: 2026-05-16.
+
+- [x] Docker Compose поднят: `postgres`, `rag-api`, `n8n`.
+- [x] n8n workflow активирован, публичный webhook отвечает без ошибок.
+- [x] n8n routing bug исправлен: whitelist true больше не ведет в `Send Denied`, обычные вопросы ведут в `Ask RAG API`, feedback ведет в `Send Feedback`.
+- [x] Локальный Telegram whitelist настроен для `432751211`.
+- [x] RAG API работает с Postgres/pgvector и Mistral: `/health` возвращает `postgres_enabled=true`, `mistral_enabled=true`, `embeddings_enabled=true`, `chunk_count=122`.
+- [x] В Postgres есть рабочие данные: `documents=42`, `document_chunks=122`; `request_logs`, `answer_feedback` и `review_queue` заполняются.
+- [x] Тесты API проходят: `python -m pytest -p no:schemathesis` -> `15 passed`.
 
 ## Tasks
 
@@ -17,14 +29,24 @@
 - [x] Добавить запись логов, оценок и очереди ревью в Postgres из API/n8n. Verify: плохая оценка появляется в `review_queue`.
 - [x] Phase 10: Verification. Прогнать демо-сценарии HR, legal, low-confidence и template draft. Verify: результаты совпадают с MVP-критериями.
 
+## Next Tasks
+
+- [ ] Проверить live Telegram happy path после настройки whitelist. Verify: сообщение от `432751211` проходит n8n, вызывает `/ask` и возвращает ответ в Telegram.
+- [ ] Проверить live feedback path из Telegram-кнопок. Verify: `answer_feedback` увеличивается, bad feedback добавляет запись в `review_queue`.
+- [x] Исправить n8n IF-ветки после симптома "бот отвечает только n8n attribution". Verify: active workflow в БД показывает `Authorized? true -> Feedback?`, `Authorized? false -> Send Denied`, `Feedback? true -> Send Feedback`, `Feedback? false -> Ask RAG API`; n8n пересоздан.
+- [x] Отобрать MVP-корпус из `corpus/`. Verify: список файлов зафиксирован в `manifests/MVP_CORPUS_FILES.txt`, лишние документы не индексируются при включенном manifest.
+- [x] Включить выбранный корпус в локальном `.env`: `DOCS_PATH=/app/corpus`, `DOCS_MANIFEST_PATH=/app/manifests/MVP_CORPUS_FILES.txt`, затем пересоздать `rag-api`. Verify: `/health` показывает `chunk_count=122`, а `document_chunks` содержит расширенный корпус с метаданными.
+- [ ] Прогнать demo runbook end-to-end. Verify: HR-вопрос, legal-вопрос, low-confidence refusal и document draft проходят по ожидаемому сценарию.
+- [x] Синхронизировать документацию по терминам `Postgres/pgvector` и `Supabase`. Verify: README и runbook одинаково описывают локальный MVP и возможный production target.
+
 ## Done When
 
-- [ ] Telegram-бот отвечает только whitelist-пользователям.
+- [ ] Telegram-бот отвечает только whitelist-пользователям в live-чате.
 - [x] Ответы по нормативным вопросам всегда содержат источники.
 - [x] Низкая уверенность приводит к отказу, а не к выдуманному ответу.
 - [x] Все запросы и оценки логируются.
 - [x] Плохие ответы попадают в очередь ревью.
-- [ ] MVP можно показать за 4-5 рабочих дней без покупки n8n Cloud.
+- [ ] MVP можно показать без покупки n8n Cloud по `docs/demo-runbook.md`.
 
 ## Notes
 
@@ -33,3 +55,4 @@
 - LLM и embeddings: Mistral.
 - Для тестового достаточно self-hosted n8n.
 - Интеграция с платными правовыми системами остается за рамками MVP.
+- Перед demo-ready статусом нужен реальный Telegram-прогон после n8n routing fix, потому что локальные проверки подтверждают workflow/env/webhook/API, но не заменяют сообщение из клиента Telegram.

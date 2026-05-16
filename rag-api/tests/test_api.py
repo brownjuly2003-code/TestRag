@@ -70,6 +70,16 @@ class FakeDocumentPlanner:
         }
 
 
+class FakeInsufficientAnswerClient:
+    enabled = True
+
+    async def answer(self, question, results):
+        return "Данных недостаточно. В предоставленных источниках нет нужных сведений."
+
+    async def document_plan(self, system_prompt, user_prompt):
+        return None
+
+
 def runtime_with_store(store: FakeStore, llm=None) -> Runtime:
     chunks = [
         DocumentChunk(
@@ -114,6 +124,28 @@ def test_ask_logs_request_and_returns_request_log_id(monkeypatch):
     assert store.request_logs[0]["telegram_user_id"] == "42"
     assert store.request_logs[0]["request_type"] == "template_draft"
     assert store.request_logs[0]["sources"]
+
+
+def test_ask_marks_llm_insufficient_answer_as_refused(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store, llm=FakeInsufficientAnswerClient()))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/ask",
+            json={
+                "question": "Сделай приказ о приеме на работу",
+                "telegram_user_id": "42",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["refused"] is True
+    assert body["confidence"] == 0
+    assert body["answer"].startswith("Данных недостаточно")
+    assert store.request_logs[0]["refused"] is True
+    assert store.request_logs[0]["confidence"] == 0
 
 
 def test_bad_feedback_is_written_to_review_queue(monkeypatch):
