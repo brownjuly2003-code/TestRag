@@ -8,7 +8,36 @@ from app.main import (
     MistralEmbeddingClient,
     Runtime,
     app,
+    is_pure_refusal,
 )
+
+
+def test_is_pure_refusal_true_for_short_refusal():
+    assert is_pure_refusal("Данных недостаточно.") is True
+    assert is_pure_refusal("Не хватает источников.") is True
+    assert is_pure_refusal("Не нашёл подходящих документов.") is True
+
+
+def test_is_pure_refusal_false_for_cautious_preface_with_body():
+    answer = (
+        "Данных недостаточно для точного ответа. "
+        "Однако из источников видно, что для отправки dangerous goods авиатранспортом "
+        "требуется AWB/MAWB/HAWB, security screening, упаковка по IATA DGR и инструктаж."
+    )
+    assert is_pure_refusal(answer) is False
+
+
+def test_is_pure_refusal_false_for_non_refusal_answer():
+    assert is_pure_refusal("Согласно ст. 70 ТК РФ испытательный срок не более 3 месяцев.") is False
+
+
+def test_is_pure_refusal_handles_mixed_punctuation_in_body():
+    answer = (
+        "Не хватает данных! Тем не менее, источник 1 указывает на AWB/MAWB/HAWB как "
+        "обязательный реквизит контракта экспедиции авиагруза, а источник 2 уточняет, "
+        "что cutoff time и terminal acceptance status фиксируются в booking confirmation."
+    )
+    assert is_pure_refusal(answer) is False
 
 
 def test_health_endpoint_reports_service_status():

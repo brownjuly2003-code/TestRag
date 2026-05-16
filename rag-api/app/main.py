@@ -505,6 +505,27 @@ def build_document_user_prompt(
     )
 
 
+REFUSAL_PREFIXES = ("данных недостаточно", "не хватает", "не нашел", "не нашёл")
+
+
+def is_pure_refusal(mistral_answer: str, min_body_chars: int = 120) -> bool:
+    """Return True only if mistral_answer is a refusal phrase without substantive body.
+
+    Mistral often leads useful aviation-grounded answers with «Данных недостаточно...»
+    as a cautious preface, then provides actual content from sources. We treat such
+    answers as valid (not a refusal). True refusal = first sentence is a refusal phrase
+    AND the remainder is shorter than ``min_body_chars``.
+    """
+    stripped = mistral_answer.strip()
+    if not stripped.lower().startswith(REFUSAL_PREFIXES):
+        return False
+    positions = [stripped.find(p) for p in (".", "!", "?")]
+    positions = [p for p in positions if p >= 0]
+    first_sentence_end = min(positions) if positions else -1
+    body = stripped[first_sentence_end + 1 :].strip() if first_sentence_end >= 0 else ""
+    return len(body) < min_body_chars
+
+
 def to_sources(results: list[Any]) -> list[Source]:
     sources = []
     for result in results:
@@ -571,18 +592,9 @@ async def ask(request: AskRequest) -> AskResponse:
     else:
         mistral_answer = await runtime.llm.answer(request.question, results)
         answer = mistral_answer or build_grounded_answer(request.question, results)
-        if mistral_answer:
-            stripped = mistral_answer.strip()
-            lower = stripped.lower()
-            refusal_prefixes = ("данных недостаточно", "не хватает", "не нашел", "не нашёл")
-            if lower.startswith(refusal_prefixes):
-                positions = [stripped.find(p) for p in (".", "!", "?")]
-                positions = [p for p in positions if p >= 0]
-                first_sentence_end = min(positions) if positions else -1
-                body = stripped[first_sentence_end + 1 :].strip() if first_sentence_end >= 0 else ""
-                if len(body) < 120:
-                    refused = True
-                    confidence = 0.0
+        if mistral_answer and is_pure_refusal(mistral_answer):
+            refused = True
+            confidence = 0.0
 
     request_log_id = runtime.store.log_request(
         telegram_user_id=request.telegram_user_id,
