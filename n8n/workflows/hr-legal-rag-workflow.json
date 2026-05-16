@@ -390,7 +390,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const TG_MAX = 4000;\nconst escapeHtml = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst mdToHtml = (s) => {\n  s = s.replace(/`([^`\\n]+)`/g, '<code>$1</code>');\n  s = s.replace(/\\*\\*([^*\\n]+?)\\*\\*/g, '<b>$1</b>');\n  s = s.replace(/^- /gm, '• ');\n  s = s.replace(/^\\* /gm, '• ');\n  return s;\n};\nconst seenFiles = new Set();\nconst dedupedSources = [];\nfor (const s of ($json.sources || [])) {\n  const file = s.file || s.chunk_id || '';\n  if (file && seenFiles.has(file)) continue;\n  seenFiles.add(file);\n  dedupedSources.push(s);\n}\nconst renderSources = (list, total) => {\n  if (!list.length) return '';\n  const lines = list.map((s, i) => {\n    const file = escapeHtml(s.file || s.chunk_id || 'unknown');\n    const section = escapeHtml(s.section || 'раздел не указан');\n    return `${i + 1}. <code>${file}</code> (${section}, score ${s.score})`;\n  }).join('\\n');\n  const header = list.length < total ? `Источники (показано ${list.length} из ${total}):` : 'Источники:';\n  return `\\n\\n${header}\\n${lines}`;\n};\nconst count = dedupedSources.length;\nconst pluralRu = (n) => {\n  const mod10 = n % 10;\n  const mod100 = n % 100;\n  if (mod10 === 1 && mod100 !== 11) return 'релевантный документ';\n  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'релевантных документа';\n  return 'релевантных документов';\n};\nconst summary = count > 0 ? `Найдено ${count} ${pluralRu(count)}.` : 'По базе знаний не найдено подходящих документов.';\nlet answer = mdToHtml(escapeHtml($json.answer));\nlet sourcesList = dedupedSources;\nlet tail = `\\n\\n${summary}${renderSources(sourcesList, count)}`;\nlet text = answer + tail;\nif (text.length > TG_MAX) {\n  const TRUNC_NOTICE = '\\n\\n<i>… ответ обрезан до лимита Telegram. Уточните вопрос для деталей.</i>';\n  while (sourcesList.length > 2 && tail.length > TG_MAX / 2) {\n    sourcesList = sourcesList.slice(0, sourcesList.length - 1);\n    tail = `\\n\\n${summary}${renderSources(sourcesList, count)}`;\n  }\n  const available = TG_MAX - tail.length - TRUNC_NOTICE.length - 1;\n  const safeAvailable = Math.max(200, available);\n  if (answer.length > safeAvailable) {\n    answer = answer.slice(0, safeAvailable).replace(/<[^>]*$/, '') + '…';\n  }\n  text = answer + TRUNC_NOTICE + tail;\n  if (text.length > TG_MAX) text = text.slice(0, TG_MAX);\n}\nreturn [{ json: { chat_id: $node['Whitelist'].json.chat_id, text, request_log_id: $json.request_log_id || '' } }];"
+        "jsCode": "const TG_MAX = 4000;\nconst escapeHtml = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst mdToHtml = (s) => {\n  s = s.replace(/`([^`\\n]+)`/g, '<code>$1</code>');\n  s = s.replace(/\\*\\*([^*\\n]+?)\\*\\*/g, '<b>$1</b>');\n  s = s.replace(/^- /gm, '• ');\n  s = s.replace(/^\\* /gm, '• ');\n  return s;\n};\nconst balanceTags = (s) => {\n  // если split разорвал <b>...</b> или <code>...</code>, дозакрыть в конце.\n  ['b', 'code'].forEach(tag => {\n    const opens = (s.match(new RegExp(`<${tag}>`, 'g')) || []).length;\n    const closes = (s.match(new RegExp(`</${tag}>`, 'g')) || []).length;\n    if (opens > closes) s = s + `</${tag}>`.repeat(opens - closes);\n    if (closes > opens) s = `<${tag}>`.repeat(closes - opens) + s;\n  });\n  return s;\n};\nconst splitIntoParts = (full, max) => {\n  if (full.length <= max) return [full];\n  const parts = [];\n  const paragraphs = full.split('\\n\\n');\n  let current = '';\n  const flush = () => { if (current) { parts.push(current); current = ''; } };\n  for (const para of paragraphs) {\n    const candidate = current ? current + '\\n\\n' + para : para;\n    if (candidate.length <= max) {\n      current = candidate;\n      continue;\n    }\n    flush();\n    if (para.length <= max) {\n      current = para;\n      continue;\n    }\n    // параграф сам по себе > max — split по предложениям, потом hard chunk\n    const sentences = para.split(/(?<=[.!?])\\s+/);\n    let sCur = '';\n    for (const s of sentences) {\n      const sCand = sCur ? sCur + ' ' + s : s;\n      if (sCand.length <= max) { sCur = sCand; continue; }\n      if (sCur) { parts.push(sCur); sCur = ''; }\n      if (s.length > max) {\n        for (let i = 0; i < s.length; i += max) parts.push(s.slice(i, i + max));\n      } else {\n        sCur = s;\n      }\n    }\n    if (sCur) parts.push(sCur);\n  }\n  flush();\n  return parts.map(balanceTags);\n};\nconst seenFiles = new Set();\nconst dedupedSources = [];\nfor (const s of ($json.sources || [])) {\n  const file = s.file || s.chunk_id || '';\n  if (file && seenFiles.has(file)) continue;\n  seenFiles.add(file);\n  dedupedSources.push(s);\n}\nconst sources = dedupedSources.map((s, i) => {\n  const file = escapeHtml(s.file || s.chunk_id || 'unknown');\n  const section = escapeHtml(s.section || 'раздел не указан');\n  return `${i + 1}. <code>${file}</code> (${section}, score ${s.score})`;\n}).join('\\n');\nconst count = dedupedSources.length;\nconst pluralRu = (n) => {\n  const mod10 = n % 10;\n  const mod100 = n % 100;\n  if (mod10 === 1 && mod100 !== 11) return 'релевантный документ';\n  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'релевантных документа';\n  return 'релевантных документов';\n};\nconst summary = count > 0 ? `Найдено ${count} ${pluralRu(count)}.` : 'По базе знаний не найдено подходящих документов.';\nconst answer = mdToHtml(escapeHtml($json.answer));\nconst fullText = `${answer}\\n\\n${summary}${sources ? `\\n\\nИсточники:\\n${sources}` : ''}`;\nconst parts = splitIntoParts(fullText, TG_MAX);\nconst chatId = $node['Whitelist'].json.chat_id;\nconst requestLogId = $json.request_log_id || '';\nconst totalParts = parts.length;\nreturn parts.map((text, i) => ({\n  json: {\n    chat_id: chatId,\n    text: totalParts > 1 ? `${text}\\n\\n<i>часть ${i + 1}/${totalParts}</i>` : text,\n    request_log_id: requestLogId,\n    is_last: i === totalParts - 1,\n    part_index: i + 1,\n    part_total: totalParts,\n  },\n}));"
       },
       "id": "format-answer",
       "name": "Format Answer",
@@ -412,6 +412,37 @@
       "position": [
         -100,
         220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ String($json.is_last) }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "last-part-if",
+      "name": "Last Part?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        80
       ]
     },
     {
@@ -451,8 +482,32 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1220,
-        80
+        1360,
+        0
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "testrag-telegram-api",
+          "name": "TestRag Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "send-answer-part",
+      "name": "Send Answer Part",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1360,
+        180
       ],
       "credentials": {
         "telegramApi": {
@@ -722,7 +777,25 @@
       "main": [
         [
           {
+            "node": "Last Part?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Last Part?": {
+      "main": [
+        [
+          {
             "node": "Send Answer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Answer Part",
             "type": "main",
             "index": 0
           }

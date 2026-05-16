@@ -298,42 +298,70 @@ def test_format_answer_converts_markdown_to_html():
     assert "• ULD" in text
 
 
-def test_format_answer_caps_at_telegram_4096_limit():
-    """Telegram sendMessage отбивает text > 4096. Format Answer truncate'ит до 4000 safety."""
-    long_answer = "**Ответ:** " + ("параграф с инфой про controlled zone. " * 200)
+def _run_format_answer_all(payload: dict, chat_id: int = 42) -> list[dict]:
+    """Format Answer теперь возвращает array of items (split на части)."""
+    nodes = _load_nodes()
+    code = nodes["Format Answer"]["parameters"]["jsCode"]
+    script = f"""
+const $node = {{ Whitelist: {{ json: {{ chat_id: {chat_id} }} }} }};
+const $json = {json.dumps(payload)};
+const result = new Function('$json', '$node', {json.dumps(code)})($json, $node);
+console.log(JSON.stringify(result));
+"""
+    result = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
+    return [item["json"] for item in json.loads(result.stdout)]
+
+
+def test_format_answer_splits_long_response_into_parts_under_tg_max():
+    """Telegram sendMessage отбивает text > 4096. Format Answer split на части ≤4000 chars."""
+    long_answer = "**Ответ:** " + ("Параграф с инфой про controlled zone и aviation security.\n\n" * 100)
     sources = [
         {"file": f"long_filename_{i:02d}.md", "section": f"Раздел {i}", "score": 0.5}
         for i in range(5)
     ]
-    result = _run_format_answer({"answer": long_answer, "request_log_id": "rl", "sources": sources})
-    text = result["text"]
-    assert len(text) <= 4000
-    assert "обрезан" in text
-    assert "Найдено" in text
-    assert "<code>long_filename_00.md</code>" in text
+    items = _run_format_answer_all({"answer": long_answer, "request_log_id": "rl", "sources": sources})
+    assert len(items) > 1, "длинный ответ должен разбиться минимум на 2 части"
+    for item in items:
+        assert len(item["text"]) <= 4000, f"part too long: {len(item['text'])}"
+    assert items[-1]["is_last"] is True
+    for it in items[:-1]:
+        assert it["is_last"] is False
+    # последняя часть должна содержать summary + sources
+    assert "Найдено" in items[-1]["text"]
+    assert "Источники:" in items[-1]["text"]
 
 
-def test_format_answer_caps_when_only_sources_overflow():
-    """Короткий ответ + 50 источников: tail сам по себе > TG_MAX, trim sources."""
-    sources = [
-        {"file": f"very_long_filename_{i}_with_more_text.md", "section": f"Раздел {i}", "score": 0.5}
-        for i in range(50)
-    ]
-    result = _run_format_answer({"answer": "короткий", "request_log_id": "rl", "sources": sources})
-    text = result["text"]
-    assert len(text) <= 4000
-    assert "показано" in text
-
-
-def test_format_answer_does_not_truncate_normal_sized_response():
-    result = _run_format_answer({
+def test_format_answer_single_part_when_short():
+    items = _run_format_answer_all({
         "answer": "Нормальный ответ на пару предложений.",
         "request_log_id": "rl",
         "sources": [{"file": "a.md", "section": "X", "score": 0.5}],
     })
-    text = result["text"]
-    assert "обрезан" not in text
-    assert "показано" not in text
+    assert len(items) == 1
+    assert items[0]["is_last"] is True
+    assert items[0]["part_total"] == 1
+    # короткий ответ — без маркера части
+    assert "часть" not in items[0]["text"]
+
+
+def test_format_answer_part_indicator_visible_on_multipart():
+    long_answer = "Параграф.\n\n" * 400  # ~4400 chars → 2 parts
+    items = _run_format_answer_all({"answer": long_answer, "request_log_id": "rl", "sources": []})
+    assert len(items) >= 2
+    for i, it in enumerate(items):
+        assert f"часть {i + 1}/{len(items)}" in it["text"]
+
+
+def test_format_answer_balances_unclosed_html_tags_across_split():
+    """Если split разрывает <b>...</b> между частями, оба куска должны быть валидны."""
+    # одна огромная фраза в **bold** на ~5000 chars (без \n\n внутри bold)
+    bolded = "**" + ("очень длинный жирный текст про controlled zone access procedure. " * 80) + "**"
+    items = _run_format_answer_all({"answer": bolded, "request_log_id": "rl", "sources": []})
+    if len(items) > 1:
+        for it in items:
+            opens = it["text"].count("<b>")
+            closes = it["text"].count("</b>")
+            assert opens == closes, f"unbalanced <b> in part: opens={opens} closes={closes}"
 
 
 def test_help_command_returns_direct_reply_with_html_help_text():
@@ -358,6 +386,22 @@ def test_history_command_sets_history_request_event_type():
 def test_docs_command_sets_docs_request_event_type():
     body = _run_whitelist({"message": {"text": "/docs", "chat": {"id": 42}, "from": {"id": 42}}})
     assert body["event_type"] == "docs_request"
+
+
+def test_workflow_routes_multipart_through_last_part_if():
+    """Format Answer выдаёт N items с is_last флагом. Last Part? разделяет:
+    last → Send Answer (с keyboard), не last → Send Answer Part (без keyboard)."""
+    workflow = _load_workflow()
+    nodes = {n["name"]: n for n in workflow["nodes"]}
+    assert "Last Part?" in nodes
+    assert "Send Answer Part" in nodes
+    # Send Answer Part — Telegram-узел БЕЗ inlineKeyboard
+    assert "inlineKeyboard" not in nodes["Send Answer Part"]["parameters"]
+    assert nodes["Send Answer Part"]["parameters"]["additionalFields"]["parse_mode"] == "HTML"
+
+    assert workflow["connections"]["Format Answer"]["main"][0][0]["node"] == "Last Part?"
+    assert workflow["connections"]["Last Part?"]["main"][0][0]["node"] == "Send Answer"
+    assert workflow["connections"]["Last Part?"]["main"][1][0]["node"] == "Send Answer Part"
 
 
 def test_workflow_has_history_and_docs_branches():
