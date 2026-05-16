@@ -27,17 +27,21 @@ Sprint 1 — что сделано (workflow JSON + Format Answer JS + Whitelist
 - M6: «Confidence: N» удалён. Вместо — «Найдено N релевантных документ(а/ов)» с русским склонением (1 → «релевантный документ», 2-4 → «релевантных документа», 5+ → «релевантных документов», 11-14 → fallback на множественное).
 - M1 шаг 1: feedback:bad: больше НЕ пишет /feedback сразу. Whitelist возвращает event_type=feedback_bad_clarify → новый узел Bad Clarify? (If) → новый HTTP-узел Edit Reply Markup → Bot API editMessageReplyMarkup подменяет клавиатуру на 3 reason-кнопки. Reason-клик (feedback:bad_inaccurate / bad_outdated / bad_human) → /feedback с comment=category:<reason>. Reason-категория попадёт в существующий answer_feedback.comment (без миграции схемы; Sprint 2 M7 добавит отдельный column).
 
-Что осталось от Sprint 1 (runtime/deploy, требует docker):
-1. Импортировать обновлённый workflow в n8n:
-   docker compose exec n8n n8n import:workflow --input=/workflows/hr-legal-rag-workflow.json --projectId=AAx39VT08WENfUYU
-   docker compose exec n8n n8n update:workflow --active=true --id=testrag-hr-legal-assistant
-   docker compose up -d --force-recreate n8n
-2. Если cloudflare tunnel мёртв — пересоздать по docs/demo-runbook.md «Локальный Telegram Webhook».
-3. TG-смок в @AIagentJu_bot:
-   - aviation Q «Что такое controlled zone?» → ожидаем HTML-ответ + «Найдено N релевантных документов» + 2 кнопки, без слова «Confidence».
-   - typing-индикатор виден до ответа.
-   - клик 👎 → исходное сообщение меняет клавиатуру на 3 reason-кнопки (без нового сообщения).
-   - клик на «Неточно» → «Оценка принята.» и в Postgres answer_feedback.comment = 'category:inaccurate'.
+Sprint 1 deployed (2026-05-17 day):
+- n8n re-import + activate + recreate выполнено. В БД 16 узлов, parse_mode=HTML на 4 send-узлах, 2 кнопки в Send Answer, новые Bad Clarify? / Edit Reply Markup / Send Typing присутствуют. Whitelist code содержит 'feedback_bad_clarify'.
+- Healthchecks: rag-api /health OK (chunk_count=207), n8n=200, cloudflare tunnel healthz=200, TG getWebhookInfo pending_update_count=0.
+
+Что осталось — 30-секундный TG-смок (только юзер: синтетический POST в n8n webhook блокирован TG-secret-токеном, генерится in-memory):
+1. В @AIagentJu_bot отправить «Что такое controlled zone?» → ожидаем typing-индикатор → HTML-ответ + «Найдено N релевантных документов» (без слова «Confidence») + 2 кнопки (👍/👎).
+2. Клик 👎 → клавиатура исходного сообщения меняется на 3 reason-кнопки (без нового сообщения).
+3. Клик на «Неточно» → «Оценка принята.» и в Postgres answer_feedback.comment = 'category:inaccurate':
+
+   docker compose exec -T postgres psql -U testrag -d testrag -tA -c "select rating, comment, created_at from answer_feedback order by created_at desc limit 3;"
+
+Если что-то не сработало:
+- Кнопки не пришли → проверь parse_mode (queries в разделе «После import workflow проверь схему» ниже).
+- Drill-down не сработал (👎 ничего не делает) → docker compose logs --tail=50 n8n | grep -i error.
+- TG webhook потерян после restart → curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo" должен показать наш cloudflare URL.
 
 Sprint 2 (после успешного смока, см. SYNTHESIS.md):
 - M5: команды /help, /clear, /history.
