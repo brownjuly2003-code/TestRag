@@ -1,6 +1,6 @@
 ---
 doc_id: tlog_regulation_dangerous_goods
-title: Инструкция по перевозке опасных грузов
+title: Инструкция по air cargo dangerous goods
 category: Transport and logistics legal docs
 document_type: инструкция
 department: Logistics
@@ -10,82 +10,117 @@ version: "1.0"
 effective_date: '2026-05-15'
 owner_role: Директор по логистике
 related_normative_sources:
-- Европейское соглашение о международной дорожной перевозке опасных грузов (ADR)
-- Правила перевозки опасных грузов автомобильным транспортом
-- ФЗ от 08.11.2007 № 259-ФЗ
+- IATA Dangerous Goods Regulations (DGR)
+- IATA lithium battery и dry ice requirements
+- Воздушный кодекс РФ
 keywords:
 - опасные грузы
-- ADR
+- IATA DGR
 - UN номер
 - инструкция
 confidentiality: internal
 ---
 
-# Инструкция по перевозке опасных грузов
+# Инструкция по air cargo dangerous goods
 
 ## Назначение
 
-Установить правила перевозки опасных грузов согласно ADR и российским нормам. Сотрудник логистического контура сверяет данные заявки, CMR или транспортной накладной, путевого листа, пломб, фотофиксации и GPS-трека; решения о допуске рейса принимаются только после устранения расхождений и подтверждения водителя.
+Установить правила air cargo dangerous goods по IATA DGR, airline approval, shipper's declaration, lithium battery restrictions и российским авиационным требованиям. Сотрудник логистического контура сверяет air cargo booking, AWB/MAWB/HAWB, аэропорт отправления и назначения, номер рейса, cutoff time, terminal handling, security screening, ULD/pallet build-up, chargeable weight, пломбы, фотофиксацию и GPS/температурные данные наземного плеча; решение о допуске груза к авиарейсу принимается только после устранения расхождений и подтверждения терминала или авиаперевозчика.
 
 ## Область применения
 
-Документ применяется при выпуске рейса, приёмке груза на складе, контроле сроков доставки и закрытии операции. Расхождения по маршруту, грузу, весу, пломбам, температуре или таможне фиксируются актом до закрытия рейса и передаются логисту и юристу до выставления претензии или ответа контрагенту.
+Документ «Инструкция по air cargo dangerous goods» применяется при air cargo booking, tender to terminal, terminal acceptance, security screening, ULD/pallet build-up, handover to airline, arrival и recovery. Расхождения по airport pair, flight number, AWB/MAWB/HAWB, chargeable weight, пломбам, температуре, security или customs status фиксируются актом в TMS/WMS/terminal log до закрытия операции и передаются логисту и юристу до претензии или ответа контрагенту.
 
 ## Термины
 
-- **Шаблон** — утвержденная структура документа с полями для заполнения.
-- **Уполномоченное лицо** — сотрудник или представитель, имеющий право подписывать или согласовывать документ.
-- **Внутренний источник** — утвержденный документ компании, на который можно ссылаться при подготовке ответа или проекта документа.
-- **Черновик** — предварительная версия, которая требует проверки ответственным специалистом.
+- **Рабочий экземпляр «Инструкция по air cargo dangerous goods»** — версия документа с датой, владельцем процесса, статусом согласования и приложениями, по которой можно принимать внутреннее решение.
+- **Основание применения «Инструкция по air cargo dangerous goods»** — заявка, приказ, договор, акт, обращение или иной первичный документ, без которого ассистент не должен формировать окончательный вывод.
+- **Авиарейс/air cargo leg** — операция с booking number, AWB/MAWB/HAWB, airport origin/destination, flight
+  number, cutoff time, terminal milestones, грузом, ULD/pallet и ответственные лица; водитель и ТС относятся
+  только к first/last mile.
+- **Операционное отклонение** — missed cutoff, offload, failed security screening, terminal damage, shortage,
+  temperature excursion, ULD/pallet build-up mismatch, chargeable weight discrepancy, customs/security hold или
+  потеря GPS на наземном плече.
+- **TMS/WMS/terminal log** — запись о booking, AWB/MAWB/HAWB, flight status, terminal acceptance, screening,
+  build-up, loading, departure/arrival, фото, temperature/GPS events и решениях air cargo operations.
 
 ## Порядок действий
 
 ### 1. Инициирование
 
-Логист или диспетчер регистрирует операцию по документу «Инструкция по перевозке опасных грузов», указывает маршрут, груз, транспорт, водителя, перевозчика/экспедитора и плановые контрольные точки. До оформления проверяются заявка, транспортная накладная или CMR, путевой лист, пломбы, фотофиксация, GPS-данные и ограничения по виду груза.
+Логист или air cargo диспетчер регистрирует операцию, указывает airport origin/destination, flight number,
+booking, AWB/MAWB/HAWB, груз, gross/chargeable weight, terminal, авиаперевозчика/GSA, экспедитора и наземный
+first/last mile при наличии. До оформления проверяются booking confirmation, AWB/MAWB/HAWB, terminal
+slot/cutoff, security screening requirements, ULD/pallet plan, temperature logger, пломбы, фотофиксация,
+GPS-данные наземного плеча и ограничения по special cargo.
 
 ### 2. Обязательные поля
 
 | Поле | Назначение | Пример заполнения |
 |------|------------|-------------------|
+| `awb_number` | Номер AWB | `{{awb_number}}` |
+| `mawb_number` | Номер MAWB | `{{mawb_number}}` |
+| `hawb_number` | Номер HAWB | `{{hawb_number}}` |
+| `booking_number` | Номер air cargo booking | `{{booking_number}}` |
+| `flight_number` | Номер авиарейса | `{{flight_number}}` |
+| `airport_origin` | Аэропорт отправления | `{{airport_origin}}` |
+| `airport_destination` | Аэропорт назначения | `{{airport_destination}}` |
+| `cutoff_time` | Cutoff time терминала | `{{cutoff_time}}` |
+| `terminal_handling_status` | Статус terminal handling | `{{terminal_handling_status}}` |
+| `security_screening_status` | Статус security screening | `{{security_screening_status}}` |
+| `uld_or_pallet_id` | ULD или pallet ID | `{{uld_or_pallet_id}}` |
+| `chargeable_weight` | Chargeable weight | `{{chargeable_weight}}` |
 | `cargo_un_number` | Номер груза UN | `{{cargo_un_number}}` |
-| `cargo_class` | Груза класса | `{{cargo_class}}` |
-| `driver_adr_certificate` | Свидетельство ADR водителя | `{{driver_adr_certificate}}` |
-| `vehicle_adr_certificate` | Свидетельство ADR транспортного средства | `{{vehicle_adr_certificate}}` |
+| `cargo_class` | Класс груза | `{{cargo_class}}` |
+| `driver_adr_certificate` | DGR/ADR допуск водителя наземного плеча | `{{driver_adr_certificate}}` |
+| `vehicle_adr_certificate` | DGR/ADR допуск ТС наземного плеча | `{{vehicle_adr_certificate}}` |
 | `route_approval` | Маршрут согласования | `{{route_approval}}` |
 | `emergency_card_number` | Номер аварийной карточки | `{{emergency_card_number}}` |
 | `escort_vehicle_flag` | Признак машины сопровождения | `{{escort_vehicle_flag}}` |
 
 ### 3. Подготовка текста
 
-Ответственный сотрудник сверяет каждое поле с первичными источниками рейса: заявка, договор перевозки/экспедиции, маршрутный лист, накладная, пломбы, GPS-трек, температурный лист. Незаполненные значения остаются плейсхолдерами `{{...}}` до устранения расхождений.
+Ответственный сотрудник сверяет каждое поле с первичными источниками рейса: air cargo booking, AWB/MAWB/HAWB,
+договором перевозки/экспедиции, terminal acceptance, screening record, ULD/pallet build-up sheet, пломбами,
+GPS-треком наземного плеча и температурным листом. Незаполненные значения остаются плейсхолдерами `{{...}}` до
+устранения расхождений.
 
 ### 4. Текст шаблона
 
 ```
-Инструкция по перевозке опасных грузов
+Инструкция по air cargo dangerous goods
 
-1. Исходные параметры рейса или операции
+1. Исходные параметры air cargo операции
+- Booking: {{booking_number}}
+- AWB/MAWB/HAWB: {{awb_number}} / {{mawb_number}} / {{hawb_number}}
+- Аэропорт отправления / назначения: {{airport_origin}} / {{airport_destination}}
+- Номер авиарейса и cutoff time: {{flight_number}} / {{cutoff_time}}
+- ULD/pallet и chargeable weight: {{uld_or_pallet_id}} / {{chargeable_weight}}
+- Terminal handling / security screening: {{terminal_handling_status}} / {{security_screening_status}}
 - Номер груза UN: {{cargo_un_number}}
-- Груза класса: {{cargo_class}}
-- Свидетельство ADR водителя: {{driver_adr_certificate}}
-- Свидетельство ADR транспортного средства: {{vehicle_adr_certificate}}
+- Класс груза: {{cargo_class}}
+- DGR/ADR допуск водителя наземного плеча: {{driver_adr_certificate}}
+- DGR/ADR допуск ТС наземного плеча: {{vehicle_adr_certificate}}
 - Маршрут согласования: {{route_approval}}
 - Номер аварийной карточки: {{emergency_card_number}}
 - Признак машины сопровождения: {{escort_vehicle_flag}}
 
 2. Документы для сверки
 - договор или заявка: {{contract_ref}};
-- транспортная накладная / CMR / коносамент: {{transport_document_ref}};
+- AWB/MAWB/HAWB, booking confirmation и CMR/ТТН только для наземного плеча: {{transport_document_ref}};
 - Перечень доказательств: {{evidence_list}}.
 
 3. Контрольные действия
-3.1. Сверить маршрут, груз, вес, упаковку, сроки и ответственных лиц.
-3.2. Проверить ограничения по опасному, скоропортящемуся, негабаритному или международному грузу.
-3.3. Зафиксировать отклонения до передачи груза следующему участнику цепочки.
+3.1. Сверить airport origin/destination, flight number, booking, AWB/MAWB/HAWB, груз, упаковку, gross/chargeable
+     weight, cutoff time, terminal SLA и ответственные лица.
+3.2. Проверить ограничения по dangerous goods, lithium batteries, pharma/cold chain, perishables, oversized,
+     valuable cargo, customs и security screening.
+3.3. Зафиксировать отклонения в TMS/WMS/terminal log до terminal acceptance, handover to airline или выпуском из
+     терминала назначения.
 
 4. Эскалация
-Спор о повреждении, утрате, просрочке, таможне или штрафе передается логисту и юристу.
+Спор о damage/loss, offload, missed cutoff, customs/security hold, temperature excursion, terminal charges или
+SLA penalty передается air cargo operations, терминалу, перевозчику/GSA и юристам.
 
 Ответственный: {{responsible_officer}}
 Дата: {{document_date}}
@@ -93,98 +128,160 @@ confidentiality: internal
 
 ### 5. Согласование
 
-Операционный документ согласуют логист рейса, диспетчер смены и ответственный по складу или водитель; юрист подключается при повреждении, утрате, просрочке, штрафе, таможенной задержке, регрессе страховщика или нарушении режима труда и отдыха водителя. Расхождения по маршруту, грузу, пломбам, весу, температуре или комплектности фиксируются актом и фотофиксацией до закрытия рейса.
+Операционный документ «Инструкция по air cargo dangerous goods» согласуют air cargo operations, диспетчер смены, WMS/склад, terminal representative и carrier/GSA; юрист подключается при damage/loss, offload, missed cutoff, customs/security hold, temperature excursion, terminal charges, insurance regress или инцидент на наземном плече first/last mile. Расхождения по airport pair, flight, AWB/MAWB/HAWB, грузу, пломбам, gross/chargeable weight, температуре, ULD/pallet или комплектности фиксируются актом и фотофиксацией до закрытия air cargo operation.
 
 ### 6. Регистрация и хранение
 
-Финальная версия и подтверждающие документы хранятся в карточке рейса или операции: заявка, накладная/CMR, путевой лист, акты, фото, GPS-трек и переписка. Доступ к материалам предоставляется логистике, складу, финансам и юристам при споре.
+Финальная версия и подтверждающие материалы хранятся в карточке air cargo operation в TMS/WMS/terminal log:
+booking, AWB/MAWB/HAWB, cargo manifest, terminal acceptance, screening record, ULD/pallet build-up sheet, акты,
+фото, temperature logger, GPS-трек наземного плеча и переписка; доступ получают logistics, terminal/warehouse,
+finance, insurance и юристы при споре.
 
+
+## Рабочие доказательства, сроки и эскалация
+
+
+- Владелец процесса проверяет, что «Инструкция по air cargo dangerous goods» применяется к подтвержденной
+  air cargo операции, а не к общей перевозке без booking, AWB/MAWB/HAWB и terminal record.
+- Рабочий комплект: DGR declaration, UN number, packing instruction, labels, lithium status и acceptance
+  check. CMR/ТТН, GPS и данные водителя используются только для наземного подвоза или вывоза, если этот
+  участок связан с airport pair и рейсом.
+- Срок реакции: контроль выполняется до booking confirmation и terminal tender; missed cutoff, failed
+  screening, offload, customs/security hold, damage/loss или temperature excursion фиксируются в
+  TMS/WMS/terminal log с владельцем и следующим сроком.
+- Основания для HOLD/STOP: нет DGR декларации, маркировки, packing instruction или trained person approval.
+  Неподтвержденные даты, суммы, персональные данные, пломбы, вес, temperature mode и реквизиты не
+  подставляются.
+- Маршрут эскалации: DG specialist, terminal acceptance, carrier/GSA, QHSE и compliance; спорный RAG-ответ,
+  проект письма или операционное решение блокируются до закрытия доказательств и решения владельца процесса.
 ## Практический сценарий
-- Сценарий: диспетчер проверяет специальный груз по «Инструкция по перевозке опасных грузов» перед назначением транспорта и маршрута.
-- Проверить: класс груза, вес, габариты, температурный режим, ADR/разрешения, маршрутные ограничения и оборудование.
-- Подтвердить источниками: паспорт груза, сертификат ADR, температурный лист, разрешение на негабарит, весовой талон и фото крепления.
-- Результат: рейс блокируется до получения разрешений, проверки транспорта и контрольных точек мониторинга.
-- Предметная проверка: признаки «опасные грузы, ADR, UN номер, инструкция» сверяются с исходными документами и не используются как общий ярлык.
+- Сценарий: диспетчер проверяет специальный груз по «Инструкция по air cargo dangerous goods» перед подтверждением booking, terminal slot и наземного плеча first/last mile.
+- Проверить: UN number/class, packing instruction, lithium battery status, gross/chargeable weight, dimensions,
+  temperature profile, IATA DGR permissions, airline approval, ULD/pallet compatibility и terminal capability.
+- Подтвердить источниками: SDS, shipper's declaration, IATA DGR/lithium declaration, temperature record, carrier
+  approval, scale ticket, ULD/pallet build-up sheet и securing фото.
+- Результат: booking/tender блокируется до carrier approval, terminal capability confirmation, screening plan,
+  ULD/pallet approval и monitoring milestones.
+- Предметная проверка: признаки «dangerous goods, IATA DGR, lithium batteries, UN number, air cargo instruction» сверяются с исходными документами и не используются как общий ярлык.
+
+## Air cargo профиль документа
+
+- Для «Инструкция по air cargo dangerous goods» air cargo профиль строится вокруг подтвержденного airport
+  pair, flight number, booking, AWB/MAWB/HAWB, cutoff time, terminal handling, security screening,
+  ULD/pallet build-up и chargeable weight.
+- Предметная опора документа: DGR declaration, UN number, packing instruction, labels, lithium status и
+  acceptance check. Эти факты должны быть видны в TMS/WMS/terminal log, акте, фото, переписке carrier/GSA
+  или связанном документе.
+- First/last mile описывает только подвоз или вывоз до аэропорта: CMR/ТТН, водитель, GPS и данные ТС не
+  заменяют AWB, terminal acceptance, screening/build-up records и cargo manifest.
+- Special cargo требует ручной проверки для dangerous goods, lithium batteries, pharma/cold chain,
+  perishables, oversized и valuable cargo; HOLD наступает, если нет DGR декларации, маркировки, packing
+  instruction или trained person approval.
+- Эскалация идет через DG specialist, terminal acceptance, carrier/GSA, QHSE и compliance, чтобы документ не
+  превращался в общий транспортный шаблон без авиационных доказательств.
 ## Правила ответа RAG-ассистента
 
-- Использовать документ как источник типа «инструкция» по теме «Инструкция по перевозке опасных грузов» только при фактическом совпадении запроса с предметом документа.
-- Перед ответом проверить: маршрут, пункты погрузки/выгрузки, груз, транспорт, водитель и ответственные лица; CMR/транспортную накладную, путевой лист, заявку, акты, пломбы, фото и GPS-трек; маршрут, груз, перевозчика/экспедитора, транспортный документ, пломбы и особый режим.
-- Если ключевых фактов нет, сначала вернуть уточняющие вопросы и не подставлять даты, суммы, персональные данные или реквизиты по догадке.
-- Для спорных, расчетных, санкционных, кадрово-защищенных или персональных данных явно указывать необходимость ручной проверки владельцем процесса.
+- Использовать документ как источник типа «инструкция» по теме «Инструкция по air cargo dangerous goods» только при фактическом совпадении запроса с предметом документа.
+- Перед ответом проверить: airport origin/destination, flight number, booking, AWB/MAWB/HAWB, cutoff time,
+  terminal acceptance, security screening, ULD/pallet, gross/chargeable weight, shipper/consignee, carrier/GSA,
+  special cargo status; для first/last mile проверить ТС, водителя, terminal pass, CMR/ТТН,
+  пломбы, фото, GPS и temperature logger.
+- Если фактов по «Инструкция по air cargo dangerous goods» не хватает, вернуть уточняющие вопросы; даты, суммы, доступы и реквизиты оставлять неподтвержденными до проверки.
+- Споры, расчеты, санкции, защищенные категории и персональные данные передавать на ручную проверку.
 
 ## Доказательства и источники для ответа
 
-- договор перевозки/экспедиции, заявка, маршрутный лист, накладная или CMR.
-- данные груза: вес, упаковка, температурный режим, опасность, пломбы, фотофиксация.
-- заявка, транспортная накладная/CMR, путевой лист, акт, фото, GPS и температурный лист.
-- паспорт безопасности, температурный лист, разрешение на негабарит, весовой талон и фото крепления.
+- договор air cargo/экспедиции, booking confirmation, AWB/MAWB/HAWB, cargo manifest и terminal acceptance record.
+- данные груза: gross/chargeable weight, dimensions, packaging, marking/labels, temperature mode, dangerous
+  goods/lithium status, пломбы, ULD/pallet и фото.
+- booking, AWB/MAWB/HAWB, terminal log, screening record, акт, фото, GPS наземного плеча и temperature logger.
+- SDS, shipper's declaration, temperature log, carrier/terminal approval, scale ticket, ULD/pallet build-up
+  sheet и securing фото.
 - спецификация, счет, УПД, сертификаты качества, акт расхождений и рекламация.
-- ключевые признаки документа: опасные грузы, ADR, UN номер, инструкция.
-- нормативные ориентиры: Европейское соглашение о международной дорожной перевозке опасных грузов (ADR); Правила перевозки опасных грузов автомобильным транспортом; ФЗ от 08.11.2007 № 259-ФЗ.
+- ключевые признаки документа: dangerous goods, IATA DGR, lithium batteries, UN number, air cargo instruction.
+- нормативные ориентиры: IATA Dangerous Goods Regulations (DGR); IATA Dangerous Goods Regulations; Воздушный кодекс РФ.
 
 ## Типовые пользовательские запросы
 
 | Запрос пользователя | Безопасная реакция ассистента |
 |---------------------|-------------------------------|
-| Что проверить по рейсу или грузу? | Сверить маршрут, груз, документы, пломбы, фото, GPS и ответственных; отметить расхождения. |
-| Кто отвечает за повреждение или просрочку? | Не назначать ответственность без договора, актов, накладной, фото и объяснений участников рейса. |
-| Какие факты нужны для «Инструкция по перевозке опасных грузов»? | Перечислить недостающие даты, документы, участников, суммы/сроки и ответственных. |
-| Можно ли применить это правило автоматически? | Проверить ограничения и при риске предложить ручную проверку владельцем процесса. |
+| Что проверить по рейсу? | Airport pair, flight, booking, AWB, cutoff, terminal status, cargo, пломбы и фото. |
+| Кто отвечает за ущерб или просрочку? | Без AWB, terminal timestamps, актов, фото и carrier evidence не решать. |
+| Какие факты нужны для «Инструкция по air cargo dangerous goods»? | Перечислить недостающие даты, документы, участников, суммы/сроки и ответственных. |
+| Можно ли применять автоматически? | Только после проверки ограничений по «Инструкция по air cargo dangerous goods»; при риске или неполных фактах нужна ручная проверка. |
 
 ## Ответственные роли
 
 | Роль | Зона ответственности |
 |------|----------------------|
-| Директор по логистике | утверждает применение документа «Инструкция по перевозке опасных грузов» и дату актуальности источника |
-| Логист/диспетчер рейса | проверяет предметные факты: маршрут, пункты погрузки/выгрузки, груз, транспорт, водитель и ответственные лица |
-| Водитель, склад или экспедитор | передает доказательства: договор перевозки/экспедиции, заявка, маршрутный лист, накладная или CMR |
-| Юрист/Compliance при риске | оценивает ограничение: вывод об ответственности без акта, накладной, фото, трека и объяснений водителя |
+| Директор по логистике | утверждает применение правила и дату актуальности источника |
+| Логист/диспетчер | проверяет airport pair, flight, booking, AWB, cargo, terminal, carrier/GSA и наземное плечо |
+| Терминал / склад / наземное плечо | передает для «Инструкция по air cargo dangerous goods» booking, AWB, terminal records, CMR/ТТН и GPS только как first/last mile evidence |
+| Юрист/Compliance | оценивает вывод об ответственности без AWB, terminal актов, фото и carrier evidence |
 
 ## Риски и ограничения
 
-- по документу «Инструкция по перевозке опасных грузов» нельзя отвечать без проверки: класс груза, вес, габариты, температурный режим, ADR/разрешения, маршрутные ограничения и оборудование.
-- ключевые признаки (опасные грузы, ADR, UN номер, инструкция) могут быть неверно применены без документа-основания.
-- вывод об ответственности без акта, накладной, фото, трека и объяснений водителя.
-- расхождение маршрута, груза, веса, пломб или температурного режима между документами.
-- несовпадение данных груза, маршрута, пломб или сроков в договоре и накладных.
-- рейс выпущен без специального разрешения, температурного контроля или весовой проверки.
-- принятие товара без проверки количества, качества, комплектности или документов.
+- Нельзя отвечать без проверки: UN number/class, packing instruction, lithium battery status, gross/chargeable
+  weight, dimensions, temperature profile, IATA DGR permissions, airline approval, ULD/pallet compatibility и
+  terminal capability.
+- ключевые признаки (dangerous goods, IATA DGR, lithium batteries, UN number, air cargo instruction) могут быть неверно применены без документа-основания.
+- вывод об ответственности без AWB/MAWB/HAWB, terminal act, фото, flight status, объяснения
+  перевозчика/терминала и доказательства наземного плеча.
+- расхождение airport pair, flight number, cargo, gross/chargeable weight, пломбы, ULD/pallet или temperature
+  mode между booking, AWB/MAWB/HAWB и terminal records.
+- несовпадение cargo, airport pair, flight, пломбы, cutoff, terminal SLA или chargeable weight в договоре,
+  booking и AWB/MAWB/HAWB.
+- air cargo booking выпущен без carrier approval, DGR/cold-chain/oversized разрешений, temperature control,
+  screening или chargeable weight check.
+- terminal acceptance без проверки packages, cargo condition, documents, AWB, screening и special cargo restrictions.
 ## Связанные документы
 
 - `MANIFEST.md`
 - `NORMATIVE_SOURCE_MANIFEST.md`
-- `05_tlog_contract_transport_road.md`
-- `05_tlog_regulation_waybill.md`
-- `05_tlog_checklist_driver_pre_trip.md`
+- `05_tlog_contract_transport_air.md`
+- `05_tlog_regulation_dispatch.md`
+- `05_tlog_checklist_cargo_acceptance.md`
 - `04_legal_claim_cargo_damage.md`
 
 ## Нормативные ориентиры
 
-- Европейское соглашение о международной дорожной перевозке опасных грузов (ADR)
-- Правила перевозки опасных грузов автомобильным транспортом
-- ФЗ от 08.11.2007 № 259-ФЗ
+- IATA Dangerous Goods Regulations (DGR)
+- IATA lithium battery и dry ice requirements
+- Воздушный кодекс РФ
 
 ## Критерии качества ответа
 
-- ответ решает именно сценарий «Инструкция по перевозке опасных грузов» и не подменяет его общим правилом категории.
-- проверено: класс груза, вес, габариты, температурный режим, ADR/разрешения, маршрутные ограничения и оборудование.
-- источники подтверждения: паспорт груза, сертификат ADR, температурный лист, разрешение на негабарит, весовой талон и фото крепления.
-- учтен профильный риск: рейс выпущен без разрешений, температурного контроля, весового подтверждения или проверки маршрута.
-- ключевые признаки (опасные грузы, ADR, UN номер, инструкция) использованы только вместе с подтвержденными документами.
-- не подставлены маршрут, вес, пломбы, температура, данные водителя, CMR или акты без транспортных документов.
+- ответ решает именно сценарий «Инструкция по air cargo dangerous goods» и не подменяет его общим правилом категории.
+- проверено: UN number/class, packing instruction, lithium battery status, gross/chargeable weight, dimensions,
+  temperature profile, IATA DGR permissions, airline approval, ULD/pallet compatibility и terminal capability.
+- источники подтверждения: SDS, shipper's declaration, IATA DGR/lithium declaration, temperature record, carrier
+  approval, scale ticket, ULD/pallet build-up sheet и securing фото.
+- учтен профильный риск: air cargo booking/tender выпущен без carrier approval, screening,
+  DGR/cold-chain/oversized разрешений, temperature control или chargeable weight confirmation.
+- ключевые признаки (dangerous goods, IATA DGR, lithium batteries, UN number, air cargo instruction) использованы только вместе с подтвержденными документами.
+- не подставлены airport pair, flight, chargeable weight, пломбы, температура, водитель/ТС наземного плеча,
+  CMR/ТТН наземного плеча или акты без air cargo документов.
 ## Контрольный список
 
-- [ ] запрос сопоставлен с документом «Инструкция по перевозке опасных грузов» и типом «инструкция»
-- [ ] проверено: маршрут, пункты погрузки/выгрузки, груз, транспорт, водитель и ответственные лица
-- [ ] собраны доказательства: договор перевозки/экспедиции, заявка, маршрутный лист, накладная или CMR
-- [ ] дополнительно сверено: данные груза: вес, упаковка, температурный режим, опасность, пломбы, фотофиксация
-- [ ] оценен риск: вывод об ответственности без акта, накладной, фото, трека и объяснений водителя
-- [ ] отдельно отмечено ограничение: расхождение маршрута, груза, веса, пломб или температурного режима между документами
-- [ ] недостающие факты вынесены в уточняющие вопросы
+- [ ] запрос сопоставлен с документом «Инструкция по air cargo dangerous goods» и типом «инструкция»
+- [ ] проверено: airport origin/destination, flight number, booking, AWB/MAWB/HAWB, terminal, carrier/GSA,
+  cargo, ULD/pallet, chargeable weight и наземное плечо first/last mile при наличии
+- [ ] собраны доказательства: air cargo contract/expedition order, booking, AWB/MAWB/HAWB, cargo manifest,
+  terminal acceptance, screening/build-up records и CMR/ТТН только для наземного плеча
+- [ ] дополнительно сверено: gross/chargeable weight, dimensions, packaging, labels/marks, temperature mode,
+  dangerous goods/lithium status, пломбы, ULD/pallet и фото
+- [ ] оценен риск: вывод об ответственности без AWB/MAWB/HAWB, terminal act, flight status, фото, объяснения
+  перевозчика/терминала и доказательства наземного плеча
+- [ ] отдельно отмечено ограничение: расхождение airport pair, flight, booking, AWB, chargeable weight, пломбы,
+  ULD/pallet или temperature mode между документами и terminal records
+- [ ] недостающие факты по «Инструкция по air cargo dangerous goods» вынесены в уточняющие вопросы
 
 ## Порядок пересмотра и актуализации
 
-Владелец документа: Директор по логистике. Плановый пересмотр проводится не реже одного раза в 12 месяцев, а также при изменении законодательства, организационной структуры, маршрута согласования, ответственных ролей или используемых шаблонов. Изменения по документу «Инструкция по перевозке опасных грузов» вступают в силу после утверждения владельцем процесса и доведения до сотрудников или контрагентов, которых затрагивает документ.
+Владелец документа: Директор по логистике. Плановый пересмотр проводится не реже одного раза в 12 месяцев, а
+также при изменении законодательства, организационной структуры, маршрута согласования, ответственных ролей или
+используемых шаблонов. Изменения вступают в силу после утверждения владельцем процесса и доведения до
+сотрудников или контрагентов, которых затрагивает документ.
 
 ## История изменений
 
@@ -192,4 +289,4 @@ confidentiality: internal
 |--------|------|-----------|-------|
 | 1.0 | 2026-05-15 | Первичная редакция внутреннего документа | Владелец процесса |
 
-> Документ применяется после утверждения владельцем процесса; при споре, изменении законодательства или отклонении от типового сценария требуется повторная проверка.
+> Применять «Инструкция по air cargo dangerous goods» после подтверждения владельцем процесса; спорные и нетиповые кейсы требуют ручной проверки.
