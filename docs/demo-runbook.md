@@ -120,6 +120,28 @@ docker logs testrag-cloudflared
 
 В логах найти URL вида `https://...trycloudflare.com`, записать его в `N8N_WEBHOOK_URL` и перезапустить n8n.
 
+**NB: trycloudflare URLs эфемерные.** При остановке контейнера `testrag-cloudflared` или его пересоздании URL **меняется**. После каждого рестарта tunnel:
+
+1. Удалить старый контейнер: `docker rm -f testrag-cloudflared`.
+2. Запустить новый: команда из блока выше.
+3. Извлечь новый URL: `docker logs testrag-cloudflared 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -1`.
+4. Заменить `N8N_WEBHOOK_URL` в `.env` на новый URL (со слешем в конце).
+5. Пересоздать n8n: `docker compose up -d --force-recreate n8n`. n8n при старте регистрирует Telegram webhook автоматически.
+6. Проверить, что Telegram видит новый webhook (без вывода токена):
+
+```powershell
+# не выводит токен в чат; читает .env, делает getWebhookInfo и печатает host + last_error
+$env_text = Get-Content .env -Raw
+$token = ([regex]::Match($env_text, 'TELEGRAM_BOT_TOKEN=(\S+)')).Groups[1].Value
+$info = Invoke-RestMethod -Uri "https://api.telegram.org/bot$token/getWebhookInfo"
+$host_only = ($info.result.url -replace "/bot$token/", "/bot***/")
+"webhook host: $($info.result.url.Split('/bot')[0])"
+"pending: $($info.result.pending_update_count)"
+"last_error: $($info.result.last_error_message)"
+```
+
+Ожидаемо: host совпадает с актуальным `*.trycloudflare.com`, pending=0, last_error пустой.
+
 ## Whitelist Telegram
 
 Пустой `ALLOWED_TELEGRAM_USER_IDS` не открывает доступ всем. Бот ответит пользователю его Telegram ID и попросит добавить этот ID в `.env`.
