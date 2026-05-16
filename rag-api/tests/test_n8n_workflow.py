@@ -191,6 +191,16 @@ def test_send_answer_has_two_feedback_buttons():
     assert all("sources" not in b["additionalFields"]["callback_data"] for b in buttons)
 
 
+def test_ask_rag_reads_user_input_from_whitelist_not_send_typing_response():
+    """Send Typing — HTTP node, его output затирает $json своим Bot API ответом.
+    Ask RAG API не должен брать question/telegram_user_id из $json — иначе /ask отдаст 422."""
+    nodes = _load_nodes()
+    body = nodes["Ask RAG API"]["parameters"]["jsonBody"]
+    assert "$node['Whitelist'].json.text" in body or '$node["Whitelist"].json.text' in body
+    assert "$node['Whitelist'].json.user_id" in body or '$node["Whitelist"].json.user_id' in body
+    assert "$json.text" not in body, "$json.text после Send Typing = undefined"
+
+
 def test_send_typing_node_calls_telegram_send_chat_action():
     nodes = _load_nodes()
     node = nodes["Send Typing"]

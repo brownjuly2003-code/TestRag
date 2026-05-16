@@ -192,7 +192,7 @@
         "url": "={{ $env.RAG_API_URL }}/ask",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ question: $json.text, telegram_user_id: $json.user_id, top_k: 5 }) }}",
+        "jsonBody": "={{ JSON.stringify({ question: $node['Whitelist'].json.text, telegram_user_id: $node['Whitelist'].json.user_id, top_k: 5 }) }}",
         "options": {}
       },
       "id": "ask-rag",
