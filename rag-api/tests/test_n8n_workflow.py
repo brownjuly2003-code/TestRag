@@ -298,6 +298,44 @@ def test_format_answer_converts_markdown_to_html():
     assert "• ULD" in text
 
 
+def test_format_answer_caps_at_telegram_4096_limit():
+    """Telegram sendMessage отбивает text > 4096. Format Answer truncate'ит до 4000 safety."""
+    long_answer = "**Ответ:** " + ("параграф с инфой про controlled zone. " * 200)
+    sources = [
+        {"file": f"long_filename_{i:02d}.md", "section": f"Раздел {i}", "score": 0.5}
+        for i in range(5)
+    ]
+    result = _run_format_answer({"answer": long_answer, "request_log_id": "rl", "sources": sources})
+    text = result["text"]
+    assert len(text) <= 4000
+    assert "обрезан" in text
+    assert "Найдено" in text
+    assert "<code>long_filename_00.md</code>" in text
+
+
+def test_format_answer_caps_when_only_sources_overflow():
+    """Короткий ответ + 50 источников: tail сам по себе > TG_MAX, trim sources."""
+    sources = [
+        {"file": f"very_long_filename_{i}_with_more_text.md", "section": f"Раздел {i}", "score": 0.5}
+        for i in range(50)
+    ]
+    result = _run_format_answer({"answer": "короткий", "request_log_id": "rl", "sources": sources})
+    text = result["text"]
+    assert len(text) <= 4000
+    assert "показано" in text
+
+
+def test_format_answer_does_not_truncate_normal_sized_response():
+    result = _run_format_answer({
+        "answer": "Нормальный ответ на пару предложений.",
+        "request_log_id": "rl",
+        "sources": [{"file": "a.md", "section": "X", "score": 0.5}],
+    })
+    text = result["text"]
+    assert "обрезан" not in text
+    assert "показано" not in text
+
+
 def test_help_command_returns_direct_reply_with_html_help_text():
     body = _run_whitelist({"message": {"text": "/help", "chat": {"id": 42}, "from": {"id": 42}}})
     assert body["event_type"] == "direct_reply"
