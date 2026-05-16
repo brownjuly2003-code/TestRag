@@ -150,7 +150,7 @@ Updated: 2026-05-16.
 - Ingestion обновляет chunks, если содержимое документа изменилось, и дозаполняет отсутствующие embeddings для уже существующих chunks.
 - Текущий расширенный MVP-корпус: `DOCS_PATH=/app/corpus`, `DOCS_MANIFEST_PATH=/app/manifests/MVP_CORPUS_FILES.txt`. `chunk_count` пересчитывается при следующем ingest после aviation pass.
 - Aviation pass 2026-05-16: 200 corpus-файлов перепрофилированы под авиагрузовую компанию (AWB/MAWB/HAWB, controlled zone, aviation security, dangerous goods). Roadmap в `aviation-corpus-tasks/`. Все структурные инварианты `=0`; aviation coverage 100%.
-- Тесты: `python -m pytest -p no:schemathesis` -> `32 passed` (+3 aviation grounding tests; +4 is_pure_refusal regression).
+- Тесты: `python -m pytest -p no:schemathesis` -> `44 passed` (+12 Sprint 1 bot-UX тестов: HTML parse_mode, 2 feedback-кнопки, drill-down причин 👎, sendChatAction, plural «Найдено N релевантных документов», HTML-escape ответа).
 - Mistral подключается через env. Если `MISTRAL_API_KEY` пустой, API возвращает grounded extractive answer по найденным источникам; если embeddings API временно отвечает HTTP-ошибкой, RAG продолжает работать через текстовый retrieval.
 - Корпус по испытательному сроку приведен в соответствие со ст. 70 ТК РФ: продление испытательного срока не допускается, периоды отсутствия не включаются в срок испытания.
 

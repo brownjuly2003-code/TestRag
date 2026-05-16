@@ -6,7 +6,7 @@
 
 ## Current Status
 
-Updated: 2026-05-16.
+Updated: 2026-05-17.
 
 - [x] Docker Compose поднят: `postgres`, `rag-api`, `n8n`.
 - [x] n8n workflow активирован, публичный webhook отвечает без ошибок.
@@ -49,11 +49,11 @@ Updated: 2026-05-16.
 ### Sprint 1 — must-have polish (0.5–1 день)
 
 - [x] Заменить «Good/Bad» лейблы на «👍 Полезно / 👎 Неточно / 📋 Нужны источники» + перенести `replyMarkup` из `additionalFields` в top-level params (n8n v1.2 schema). 2026-05-17.
-- [ ] **Удалить кнопку «📋 Нужны источники»** (анти-паттерн по обоим research-проходам: sources должны быть всегда inline). Оставить 2 кнопки.
-- [ ] Добавить `sendChatAction('typing')` в n8n workflow перед `Ask RAG API`.
-- [ ] Перейти на `parse_mode='HTML'` в Send Answer; обновить Format Answer JS (`**bold**` → `<b>`, filenames → `<code>`, citations → `<a>`).
-- [ ] Убрать вывод «Confidence: N» в UI. Заменить на behavioral подсказку («Найдено 3 документа по теме»).
-- [ ] При 👎 показать 3 reason-кнопки (Неточно/Устарело/Нужен человек) и записать категорию в `answer_feedback`.
+- [x] **Удалить кнопку «📋 Нужны источники»** (анти-паттерн по обоим research-проходам: sources должны быть всегда inline). Оставить 2 кнопки. 2026-05-17.
+- [x] Добавить `sendChatAction('typing')` в n8n workflow перед `Ask RAG API` (HTTP-узел через Bot API). 2026-05-17.
+- [x] Перейти на `parse_mode='HTML'` в Send Answer/Direct Reply/Feedback Ack/Denied; Format Answer переписан с HTML-escape, filenames в `<code>`. 2026-05-17.
+- [x] Убрать вывод «Confidence: N» в UI. Заменить на «Найдено N релевантных документ(а/ов)» с русским склонением. 2026-05-17.
+- [x] При 👎 → `event_type=feedback_bad_clarify` + `Edit Reply Markup` HTTP-узел подменяет клавиатуру на 3 reason-кнопки (Неточно/Устарело/Нужен человек). Reason-клик пишет `comment=category:<reason>` в `answer_feedback`. 2026-05-17.
 
 ### Sprint 2 — UX uplift (1–2 дня)
 

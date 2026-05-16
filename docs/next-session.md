@@ -14,61 +14,67 @@
 - Telegram bot token и Mistral API key — только в локальном .env, не выводить.
 - Документация: README.md, mvp-plan.md, docs/demo-runbook.md, docs/legal-document-prompts.md, docs/research/SYNTHESIS.md.
 
-Текущее состояние (HEAD 9564ecb, 2026-05-17 night):
-- 200 corpus-файлов прошли aviation profile pass (AWB/MAWB/HAWB, controlled zone, aviation security, dangerous goods, GHA, ULD, cutoff). Все категории покрыты.
-- Структурные инварианты: manifest=200, missing=0, extra=0, missing_sections=0, frontmatter_issues=0, protected_issues=0, broken_corpus_refs=0, aviation coverage 100%.
-- MVP подборка 44 файла (manifests/MVP_CORPUS_FILES.txt), chunk_count=207 после ingest.
-- pytest 32/32 (rag-api/tests/: test_ingestion, test_llm, test_n8n_workflow, test_rag, test_api).
-- Golden Q 10/10 PASSED через POST /ask (см. python-скрипт в этой сессии или docs/demo-runbook.md «Aviation demo questions»).
-- TG E2E подтверждён: «привет» direct-reply OK; aviation Q «controlled zone» полный RAG-путь OK через @AIagentJu_bot. Inline-кнопки feedback теперь приходят (root cause fix: replyMarkup перенесён с additionalFields в top-level params n8n v1.2 Telegram-node).
+Текущее состояние (HEAD после Sprint 1 commit, 2026-05-17 day):
+- 200 corpus-файлов прошли aviation profile pass. MVP подборка 44 файла, chunk_count=207 после ingest.
+- pytest 44/44 (rag-api/tests/: test_ingestion, test_llm, test_n8n_workflow x18, test_rag, test_api).
 - Cloudflare tunnel: trycloudflare URLs эфемерны, пересоздавать процедурой из docs/demo-runbook.md.
+- Sprint 1 (bot UX polish) — закрыт в коде/тестах, ждёт n8n re-import + TG-смок.
 
-Что закрыто этим путём:
-- RAG fix (e26a7da, 4545982): Mistral cautious lead-in («Данных недостаточно. Однако...») больше не обрезается к refused. Helper is_pure_refusal() вынесен с 4 unit-тестами. 429 от Mistral free tier — graceful degrade на build_grounded_answer.
-- MVP-корпус расширен на 6 файлов (7a798ec): attendance, safety, training, business_trip, data_retention, faq_dismissal — для controlled zone / aviation security / dangerous goods / retention / dismissal с пропуском.
-- TG keyboard fix (9564ecb): underscore escape в Format Answer, dedup sources, replyMarkup root-cause fix. Кнопки временные «👍 Полезно / 👎 Неточно / 📋 Нужны источники».
+Sprint 1 — что сделано (workflow JSON + Format Answer JS + Whitelist JS):
+- M2+A1: Send Answer теперь 2 кнопки (👍 Полезно / 👎 Неточно). Кнопка «📋 Нужны источники» удалена.
+- M3: новый HTTP-узел Send Typing вызывает Bot API sendChatAction('typing') между Direct Reply? (false) и Ask RAG API. Использует $env.TELEGRAM_BOT_TOKEN. neverError=true — задержка тайпинга не блокирует ответ.
+- M4: parse_mode='HTML' проставлен на Send Answer / Send Direct Reply / Send Feedback Ack / Send Denied. Format Answer переписан с HTML-escape (`<` → `&lt;`), filenames в `<code>...</code>`, убран escapeUnderscores.
+- M6: «Confidence: N» удалён. Вместо — «Найдено N релевантных документ(а/ов)» с русским склонением (1 → «релевантный документ», 2-4 → «релевантных документа», 5+ → «релевантных документов», 11-14 → fallback на множественное).
+- M1 шаг 1: feedback:bad: больше НЕ пишет /feedback сразу. Whitelist возвращает event_type=feedback_bad_clarify → новый узел Bad Clarify? (If) → новый HTTP-узел Edit Reply Markup → Bot API editMessageReplyMarkup подменяет клавиатуру на 3 reason-кнопки. Reason-клик (feedback:bad_inaccurate / bad_outdated / bad_human) → /feedback с comment=category:<reason>. Reason-категория попадёт в существующий answer_feedback.comment (без миграции схемы; Sprint 2 M7 добавит отдельный column).
 
-Bot UX research (Kimi + Codex, 2026-05-17):
-- Оба независимых прохода в docs/research/2026-05-17-{kimi,codex}-bot-ux.md.
-- Консенсусный синтез + 3 sprint roadmap в docs/research/SYNTHESIS.md.
-- Sprint 1 уже частично в mvp-plan.md «Bot UX Roadmap».
+Что осталось от Sprint 1 (runtime/deploy, требует docker):
+1. Импортировать обновлённый workflow в n8n:
+   docker compose exec n8n n8n import:workflow --input=/workflows/hr-legal-rag-workflow.json --projectId=AAx39VT08WENfUYU
+   docker compose exec n8n n8n update:workflow --active=true --id=testrag-hr-legal-assistant
+   docker compose up -d --force-recreate n8n
+2. Если cloudflare tunnel мёртв — пересоздать по docs/demo-runbook.md «Локальный Telegram Webhook».
+3. TG-смок в @AIagentJu_bot:
+   - aviation Q «Что такое controlled zone?» → ожидаем HTML-ответ + «Найдено N релевантных документов» + 2 кнопки, без слова «Confidence».
+   - typing-индикатор виден до ответа.
+   - клик 👎 → исходное сообщение меняет клавиатуру на 3 reason-кнопки (без нового сообщения).
+   - клик на «Неточно» → «Оценка принята.» и в Postgres answer_feedback.comment = 'category:inaccurate'.
 
-Что делать дальше (Sprint 1 из SYNTHESIS, must-have):
-1. **Убрать кнопку «📋 Нужны источники»** — анти-паттерн по обоим research-проходам. Sources должны быть всегда inline (они и сейчас в тексте ответа). Оставить 2 кнопки.
-2. **Typing indicator**: добавить узел sendChatAction('typing') в n8n workflow между Whitelist и Ask RAG API.
-3. **HTML formatting**: перейти на parse_mode='HTML' в Send Answer. Обновить Format Answer JS: **bold** → <b>, filenames → <code>, citations → <a>. Markdown V1 хрупкий для legal-цитат.
-4. **Behavioral confidence**: убрать «Confidence: N» из текста, заменить на «Найдено N релевантных документов».
-5. **Conditional feedback на 👎**: при нажатии bad показать 3 reason-кнопки (Неточно / Устарело / Нужен человек), записать категорию в answer_feedback.
-6. **Команды**: /help (примеры запросов), /clear (reset session), /history (последние 5 запросов юзера из request_logs).
-
-Sprint 2 / Sprint 3 — см. mvp-plan.md «Bot UX Roadmap» и docs/research/SYNTHESIS.md.
+Sprint 2 (после успешного смока, см. SYNTHESIS.md):
+- M5: команды /help, /clear, /history.
+- M7: расширить answer_feedback (chunk_ids, category enum, free_text).
+- N1: 2 follow-up question buttons.
+- N5: /docs.
 
 Перед работой:
 - Не выводить .env, токены, ключи в чат.
-- После изменений python-кода запускать python -m pytest -p no:schemathesis.
-- После изменений n8n workflow: docker compose exec n8n n8n import:workflow --input=/workflows/hr-legal-rag-workflow.json --projectId=AAx39VT08WENfUYU + update:workflow --active=true + docker compose up -d --force-recreate n8n.
-- Перед TG-смоком проверить, жив ли cloudflare tunnel: curl ${N8N_WEBHOOK_URL}healthz должен вернуть 200. Если 000 — пересоздать tunnel по docs/demo-runbook.md «Локальный Telegram Webhook».
+- После изменений python-кода запускать python -m pytest -p no:schemathesis (ожидаем 44/44).
+- После изменений n8n workflow: re-import (см. шаг 1 выше).
+- Перед TG-смоком проверить, жив ли cloudflare tunnel: curl ${N8N_WEBHOOK_URL}healthz должен вернуть 200.
 ```
 
 ## Минимальные команды
 
 ```powershell
 cd D:\TestRag
-python -m pytest -p no:schemathesis  # 32 passed
+python -m pytest -p no:schemathesis  # 44 passed
 docker compose config --quiet
 docker compose up -d
 curl http://localhost:8000/health    # ожидается chunk_count=207
 ```
 
-## Если кнопки feedback не приходят в TG
-
-Root cause уже исправлен в `9564ecb`: `replyMarkup` + `inlineKeyboard` должны быть в top-level `parameters` Send Answer, не в `additionalFields`. Если регрессия повторится после правки workflow:
+## После import workflow проверь схему
 
 ```powershell
-docker compose exec -T postgres psql -U testrag -d testrag -tA -c "select n->'parameters'->>'replyMarkup' from n8n.workflow_entity, jsonb_array_elements(nodes::jsonb) n where id='testrag-hr-legal-assistant' and n->>'name'='Send Answer';"
+docker compose exec -T postgres psql -U testrag -d testrag -tA -c "select n->>'name' from n8n.workflow_entity, jsonb_array_elements(nodes::jsonb) n where id='testrag-hr-legal-assistant' order by 1;"
 ```
 
-Ожидаемо: `inlineKeyboard`. Если пусто или null — `replyMarkup` опять забрался в `additionalFields`.
+Ожидаемо: 16 узлов, в т.ч. `Bad Clarify?`, `Edit Reply Markup`, `Send Typing`.
+
+```powershell
+docker compose exec -T postgres psql -U testrag -d testrag -tA -c "select n->'parameters'->'additionalFields'->>'parse_mode' from n8n.workflow_entity, jsonb_array_elements(nodes::jsonb) n where id='testrag-hr-legal-assistant' and n->>'name'='Send Answer';"
+```
+
+Ожидаемо: `HTML`. Если null — re-import не применился, повторить.
 
 ## Если cloudflare tunnel умер
 
