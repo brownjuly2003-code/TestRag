@@ -56,13 +56,40 @@ User_id distinct per (case, arm) для изоляции истории.
 | ΔHit@1 в (−0.05, +0.20) | Оставить opt-in; задокументировать как «полезно для специфичных follow-up». |
 | ΔHit@1 < −0.05 | Откатить prev_qa_count=2; гипотеза не подтвердилась (шум перевешивает контекст). |
 
-## Текущий статус
+## Live A/B результат (2026-05-17, **финальный — на overlap=75 baseline + MIN_CONFIDENCE=0.25**)
 
-- ✅ Код: 15 unit-тестов зелёные (augment, filter, /ask integration).
-- ✅ Harness готов.
-- ⏸ Live A/B: отложен (Docker cold start на Win11+WSL2 >10 минут — см. memory `feedback-docker-cold-start-windows`). Запустить при следующем подъёме Docker:
-  ```
-  docker compose up -d --force-recreate rag-api
-  python scripts/eval_multiturn.py --output .tmp/eval_multiturn.json
-  ```
-  Результат вписать в этот файл (§ A/B harness) + закоммитить `.tmp/eval_multiturn.json` → `docs/findings/data/eval_multiturn.json`.
+Прогон `python scripts/eval_multiturn.py --output .tmp/eval_multiturn.json` после `docker compose up -d --force-recreate rag-api`:
+
+| Arm | n | Hit@1 | Hit@5 | MRR |
+|---|---:|---:|---:|---:|
+| **A** `prev_qa_count=0` | 5 | 0.60 | 0.60 | 0.60 |
+| **B** `prev_qa_count=2` | 5 | 0.60 | 0.80 | 0.65 |
+| **Δ (B−A)** | — | 0.00 | **+0.20** | **+0.05** |
+
+Per-case:
+
+| Case                          | A rank | B rank | Δ |
+|-------------------------------|:------:|:------:|:--|
+| controlled_zone_followup      | 1      | 1      | — (уже top-1 в A) |
+| dangerous_goods_doc_lifespan  | None   | None   | — (vocabulary gap)|
+| awb_mawb_breakdown            | 1      | 1      | — (single-turn intent достаточный) |
+| probation_extension_check     | 1      | 1      | — |
+| claim_procedure_followup      | None   | 4      | ↑ entered top-5 (был miss) |
+
+## Промежуточный прогон на overlap=50 (для истории, не финальный)
+
+| Arm | Hit@1 | Hit@5 | MRR |
+|---|---:|---:|---:|
+| A | 0.20 | 0.60 | 0.34 |
+| B | 0.40 | 0.60 | 0.44 |
+| Δ | +0.20 | 0.00 | +0.10 |
+
+Профиль разный: на слабой retrieval-системе (overlap=50, MRR single-turn=0.56) Prev-N-QA продвигает top-1 (controlled_zone: 2→1). На корректной (overlap=75, MRR single-turn=0.78) — улучшает long-tail top-5 (claim_procedure: miss → rank 4). Сигнал augmentation полезен в обоих режимах, ниши разные.
+
+## Решение
+
+ΔHit@1=0, ΔMRR=+0.05, ΔHit@5=+0.20 — попадает в среднюю зону матрицы интерпретации («Δhit@1 в (−0.05, +0.20) → opt-in; задокументировать как «полезно для специфичных follow-up»»). claim_procedure_followup перешёл из miss в top-5 — это и есть та ниша.
+
+**Действие:** оставить `prev_qa_count` opt-in (default=0). Документировать рекомендацию использовать `prev_qa_count=2` для bot flows, где у пользователя стабильно есть predecessor turns. В n8n workflow не включать дефолтно — слишком слабый ΔHit@1 для глобального on.
+
+`.tmp/eval_multiturn.json` финального прогона сохранён.

@@ -1,5 +1,5 @@
 """E2E TG smoke: реальные нажатия кнопок через Telethon user account.
-Тестирует N1 (follow-up) + N3 (human handover) + N4 (reply threading)."""
+Тестирует N1 (follow-up) + N2 (🔁 Уточнить / 📖 Развернуть) + N3 (human handover) + N4 (reply threading)."""
 from __future__ import annotations
 
 import asyncio
@@ -117,6 +117,50 @@ async def main() -> int:
         for i, row in enumerate(rows):
             for b in row:
                 print(f"      row{i} '{b['text']}' → {b['data']}")
+
+        # Step 2.5: N2 Quick-actions sanity — наличие 🔁 + 📖 (Sprint 6 #6)
+        has_clarify = any(
+            (b["data"] or "").startswith("clarify:")
+            for row in rows for b in row
+        )
+        has_expand = any(
+            (b["data"] or "").startswith("expand:")
+            for row in rows for b in row
+        )
+        print(f"    {'✓' if has_clarify else '✗'} N2: 🔁 Уточнить button present")
+        print(f"    {'✓' if has_expand else '✗'} N2: 📖 Развернуть button present")
+
+        # Step 2.6: click 🔁 Уточнить → expect new bot reply with rerun (top_k=10)
+        clarify_data = await click_button_by_prefix(reply1, "clarify:")
+        if clarify_data:
+            print(f"\n[2.6] CLICKED 🔁 Уточнить: {clarify_data}")
+            reply_clarify = await wait_for_new_message(client, chat, reply1.id)
+            if reply_clarify:
+                snippet = (reply_clarify.message or "")[:140].replace("\n", " ")
+                print(f"    BOT clarify reply msg_id={reply_clarify.id}: {snippet}")
+                print("    ✓ N2: rerun answered")
+            else:
+                print("    ✗ N2: clarify reply timeout", file=sys.stderr)
+        else:
+            print("    WARN: 🔁 button missing — skipping", file=sys.stderr)
+            reply_clarify = reply1
+
+        # Step 2.7: click 📖 Развернуть на свежем reply (или fallback на reply1)
+        anchor = reply_clarify or reply1
+        expand_data = await click_button_by_prefix(anchor, "expand:")
+        if expand_data:
+            print(f"\n[2.7] CLICKED 📖 Развернуть: {expand_data}")
+            reply_expand = await wait_for_new_message(client, chat, anchor.id)
+            if reply_expand:
+                snippet = (reply_expand.message or "")[:140].replace("\n", " ")
+                print(f"    BOT expand reply msg_id={reply_expand.id}: {snippet}")
+                print("    ✓ N2: chunk expanded")
+                # обновляем reply1 на свежее сообщение чтобы followup попал в актуальный keyboard
+                reply1 = reply_expand
+            else:
+                print("    ✗ N2: expand reply timeout", file=sys.stderr)
+        else:
+            print("    WARN: 📖 button missing — skipping", file=sys.stderr)
 
         # Step 3: click first 📎 follow-up button (N1)
         followup_data = await click_button_by_prefix(reply1, "followup:")

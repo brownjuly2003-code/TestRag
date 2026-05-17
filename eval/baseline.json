@@ -7,7 +7,7 @@
     "hit@5": 1.0,
     "mrr": 0.7815,
     "refusal_accuracy": 1.0,
-    "avg_latency_ms": 6074,
+    "avg_latency_ms": 4735,
     "avg_confidence": 0.7981
   },
   "rows": [
@@ -29,11 +29,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 1.0,
-      "latency_ms": 3431,
+      "latency_ms": 4150,
       "hit@1": 1,
       "hit@5": 1,
       "rank": 1,
-      "request_log_id": "91e3c763-43ac-4d30-8993-fa91bf3a4800"
+      "request_log_id": "32a9ba81-772d-4da9-937c-fa320b8c2346"
     },
     {
       "q": "Какие документы нужны для отправки dangerous goods авиатранспортом?",
@@ -54,11 +54,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 0.7198,
-      "latency_ms": 2814,
+      "latency_ms": 4732,
       "hit@1": 0,
       "hit@5": 1,
       "rank": 5,
-      "request_log_id": "77986f27-a2b4-4bea-9759-1c9aaf6a5e39"
+      "request_log_id": "a0802776-ae45-4abe-919d-632cff3a5e0a"
     },
     {
       "q": "Какие основания для досрочного расторжения трудового договора?",
@@ -78,11 +78,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 0.4861,
-      "latency_ms": 3291,
+      "latency_ms": 3952,
       "hit@1": 0,
       "hit@5": 1,
       "rank": 2,
-      "request_log_id": "43139710-4a41-4bab-9a1b-a485972b116e"
+      "request_log_id": "ae6d20e4-9208-4702-9143-8d596874dbe9"
     },
     {
       "q": "Что такое AWB и MAWB?",
@@ -102,11 +102,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 1.0,
-      "latency_ms": 1980,
+      "latency_ms": 1877,
       "hit@1": 1,
       "hit@5": 1,
       "rank": 1,
-      "request_log_id": "3acc00d5-ef3c-4412-9bbd-9f0470496ca2"
+      "request_log_id": "f921799f-ed40-47e1-90e8-b5da434d8743"
     },
     {
       "q": "Какой испытательный срок по ТК РФ?",
@@ -126,11 +126,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 1.0,
-      "latency_ms": 2643,
+      "latency_ms": 2808,
       "hit@1": 1,
       "hit@5": 1,
       "rank": 1,
-      "request_log_id": "d64043f4-bef2-4ffc-9d19-f4379e010c72"
+      "request_log_id": "5219f908-4212-4553-bec4-5c7113918c83"
     },
     {
       "q": "Какой максимальный размер ULD для авиаперевозки?",
@@ -150,11 +150,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 1.0,
-      "latency_ms": 2177,
+      "latency_ms": 2837,
       "hit@1": 1,
       "hit@5": 1,
       "rank": 1,
-      "request_log_id": "458336aa-5c2c-4fff-acab-e8cf8938c6e8"
+      "request_log_id": "a8e3a797-2b9a-4597-8f4b-9a8f03c8c8bb"
     },
     {
       "q": "Как составить претензию контрагенту?",
@@ -174,11 +174,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 0.5754,
-      "latency_ms": 11040,
+      "latency_ms": 18097,
       "hit@1": 1,
       "hit@5": 1,
       "rank": 1,
-      "request_log_id": "95a73622-6058-4a75-9d9e-b83500c45ebc"
+      "request_log_id": "e37e9123-7c2a-4a58-b6a0-711934ff5250"
     },
     {
       "q": "Какие правила для cutoff time в авиагрузовых перевозках?",
@@ -198,11 +198,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 1.0,
-      "latency_ms": 3240,
+      "latency_ms": 4318,
       "hit@1": 0,
       "hit@5": 1,
       "rank": 3,
-      "request_log_id": "4069bd45-79f2-49c9-b3e7-71b58d31f123"
+      "request_log_id": "dc7995c0-fb6c-49f4-850d-8221cf6cea2e"
     },
     {
       "q": "Какие документы нужны для отправки лития морем?",
@@ -219,11 +219,11 @@
       "refused": true,
       "refusal_correct": true,
       "confidence": 0.209,
-      "latency_ms": 743,
+      "latency_ms": 1275,
       "hit@1": 0,
       "hit@5": 0,
       "rank": null,
-      "request_log_id": "b1af0ee8-7e56-40f1-b5d8-c215e3e1bcba"
+      "request_log_id": "b24ff7e2-9843-4a6d-8659-2942f8e2e15f"
     },
     {
       "q": "Что такое GHA?",
@@ -243,11 +243,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 0.9908,
-      "latency_ms": 29389,
+      "latency_ms": 3310,
       "hit@1": 1,
       "hit@5": 1,
       "rank": 1,
-      "request_log_id": "d1ba8e53-b8c0-4cec-b5f6-990d43ec36ed"
+      "request_log_id": "67585c67-bb57-4bb6-8cbf-a13c28ee669b"
     }
   ]
 }

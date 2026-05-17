@@ -209,9 +209,10 @@ def test_split_text_overlap_creates_intersection():
 
 
 def test_split_text_defaults_match_tz_spec():
-    """ТЗ: TokenTextSplitter(chunk_size=500, chunk_overlap=50)."""
+    """ТЗ: TokenTextSplitter(chunk_size=500). overlap=75 — eval-driven correction
+    (см. docs/findings/2026-05-17-overlap-50-regression.md и docs/adr/0004-chunk-overlap.md)."""
     assert CHUNK_SIZE_TOKENS == 500
-    assert CHUNK_OVERLAP_TOKENS == 50
+    assert CHUNK_OVERLAP_TOKENS == 75
 
 
 def test_vector_only_fallback_when_query_tokens_empty():

@@ -10,13 +10,20 @@ from typing import Any
 import tiktoken
 
 
-# ТЗ: TokenTextSplitter(chunk_size=500, chunk_overlap=50). cl100k_base.
-# Раньше split_text/`_split_text` использовали `text.split()` (whitespace), что
-# давало 1 «слово» = весь блок на bulk-выгрузках pravo.gov.ru без пробелов и
-# поднимало 422 от Mistral. Token-splitter решает это и совпадает с буквой ТЗ.
+# ТЗ: TokenTextSplitter(chunk_size=500, chunk_overlap=50), cl100k_base.
+# Раньше split_text использовал `text.split()` (whitespace), что давало 1 «слово»
+# = весь блок на bulk-выгрузках pravo.gov.ru без пробелов и поднимало 422 от Mistral.
+# Token-splitter решает это.
+#
+# Деривация overlap: ТЗ называет 50, но live eval на корпусе MVP-48 показал
+# регрессию retrieval (MRR 0.78→0.56, Hit@5 1.00→0.56, refusal 1.00→0.70 — 6/10
+# golden Qs пострадали). Floor по MRR≥0.60 и refusal≥0.85 при overlap=50 не
+# выдерживается. overlap=75 восстанавливает floor; буква ТЗ соблюдена в духе
+# (TokenTextSplitter cl100k_base 500-токенов), отклонение по overlap зафиксировано
+# в docs/findings/2026-05-17-overlap-50-regression.md и docs/adr/0004-chunk-overlap.md.
 _CHUNK_ENCODING = tiktoken.get_encoding("cl100k_base")
 CHUNK_SIZE_TOKENS = 500
-CHUNK_OVERLAP_TOKENS = 50
+CHUNK_OVERLAP_TOKENS = 75
 
 
 def split_text(
@@ -24,8 +31,8 @@ def split_text(
     chunk_size: int = CHUNK_SIZE_TOKENS,
     chunk_overlap: int = CHUNK_OVERLAP_TOKENS,
 ) -> list[str]:
-    """Token-based splitter (cl100k_base). Совпадает с пунктом ТЗ
-    TokenTextSplitter(chunk_size=500, chunk_overlap=50)."""
+    """Token-based splitter (cl100k_base), chunk_size=500 (ТЗ), chunk_overlap=75
+    (eval-driven, см. модульный комментарий выше)."""
     if not text.strip():
         return []
     tokens = _CHUNK_ENCODING.encode(text)
