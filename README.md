@@ -15,18 +15,22 @@ HR/legal сотрудник получает ответ на корпорати�
 
 ## Качество ретривера (10 golden questions)
 
-| Метрика | Pre-Sprint 4 | Post-Sprint 4 | Цель Sprint 4 |
-|---|---|---|---|
-| Hit@1 | 0.22 | **0.44** | ≥0.60 |
-| Hit@5 | 0.33 | **0.67** | ≥0.55 |
-| MRR | 0.28 | **0.56** | ≥0.55 ✓ |
-| Refusal accuracy | 0.70 | 0.70 | ≥0.90 |
-| p50 latency, ответ | 4.2 s | 4.2 s | <8 s |
-| Корпус (chunks) | 207 | 175 | — |
+| Метрика | Pre-S4 | Post-S4 | Post-S5 | Цель |
+|---|---|---|---|---|
+| Hit@1 | 0.22 | 0.44 | **0.67** | ≥0.60 ✓ |
+| Hit@5 | 0.33 | 0.67 | **0.89** | ≥0.55 ✓ |
+| MRR | 0.28 | 0.56 | **0.76** | ≥0.55 ✓ |
+| Refusal accuracy | 0.70 | 0.70 | **1.00** | ≥0.90 ✓ |
+| Avg confidence | 0.55 | 0.55 | **0.85** | — |
+| p50 latency | 4.2 s | 4.2 s | 5.1 s | <8 s ✓ |
+| Корпус (chunks) | 207 | 175 | 189 | — |
 
-Eval baseline — `.tmp/eval_baseline.json`, исполнение — `python scripts/eval_retrieval.py`.
+Eval baseline — `eval/baseline.json`, исполнение — `python scripts/eval_retrieval.py`. CI regression gate — `pytest scripts/test_eval_regression.py` (floor: MRR ≥0.60, Hit@1 ≥0.50, refusal ≥0.85).
 
-Sprint 4 sweep (commit `9017878`): убрана aviation-pollution из HR-шаблонов и не-safety политик, MRR вырос +28pp. Подробный разбор и план Sprint 5 — `docs/findings/2026-05-17-sprint4-retrieval-polish.md`.
+- **Sprint 4 sweep** (`9017878`): убрана aviation-pollution из HR-шаблонов и не-safety политик, MRR +28pp.
+- **Sprint 5 content enrichment** (`?`): глоссарий controlled zone / AWB / MAWB / HAWB / ULD / GHA / cutoff / dangerous goods добавлен в `07_faq_expedition`, `05_tlog_regulation_waybill`, `01_hr_pol_safety`. Расширен MVP-44 → MVP-47 манифест. MRR +20pp, refusal accuracy +30pp.
+
+Подробный разбор — `docs/findings/2026-05-17-sprint4-retrieval-polish.md`.
 
 ## Цель
 

@@ -22,58 +22,60 @@ import requests
 
 API = "http://localhost:8000"
 
-# Каждый item: question + expected_file (substring matched), optional expected_section,
-# optional expected_refused (если True, ожидаем status='unanswerable').
+# Каждый item: question + expected_files (список substrings — любое попадание = hit), optional
+# expected_section, optional expected_refused (если True, ожидаем status='unanswerable').
+# Список вместо одного substring: после Sprint 5 content enrichment один термин может корректно
+# находиться И в 07_faq_expedition (глоссарий), И в 05_tlog/06_comp (профильный регламент).
 GOLDEN_QUESTIONS: list[dict[str, Any]] = [
     {
         "q": "Что такое controlled zone?",
-        "expected_file": "01_hr_pol_safety",
+        "expected_files": ["01_hr_pol_safety", "07_faq_expedition"],
         "expected_refused": False,
     },
     {
         "q": "Какие документы нужны для отправки dangerous goods авиатранспортом?",
-        "expected_file": "06_comp",
+        "expected_files": ["06_comp", "05_tlog_regulation_dangerous_goods", "07_faq_expedition"],
         "expected_refused": False,
     },
     {
         "q": "Какие основания для досрочного расторжения трудового договора?",
-        "expected_file": "07_faq_dismissal",
+        "expected_files": ["07_faq_dismissal", "03_legal_contract_termination"],
         "expected_refused": False,
     },
     {
         "q": "Что такое AWB и MAWB?",
-        "expected_file": "05_tlog",
+        "expected_files": ["05_tlog", "07_faq_expedition"],
         "expected_refused": False,
     },
     {
         "q": "Какой испытательный срок по ТК РФ?",
-        "expected_file": "01_hr_probation",
+        "expected_files": ["01_hr_probation", "07_faq_probation"],
         "expected_refused": False,
     },
     {
         "q": "Какой максимальный размер ULD для авиаперевозки?",
-        "expected_file": "05_tlog",
+        "expected_files": ["05_tlog", "07_faq_expedition"],
         "expected_refused": False,
     },
     {
         "q": "Как составить претензию контрагенту?",
-        "expected_file": "04_legal_cla",
+        "expected_files": ["04_legal_cla", "07_faq_claims_procedure"],
         "expected_refused": False,
     },
     {
         "q": "Какие правила для cutoff time в авиагрузовых перевозках?",
-        "expected_file": "05_tlog",
+        "expected_files": ["05_tlog", "07_faq_expedition"],
         "expected_refused": False,
     },
     # Off-corpus refusal: тематика которой нет в базе.
     {
         "q": "Какие документы нужны для отправки лития морем?",
-        "expected_file": None,
+        "expected_files": [],
         "expected_refused": True,
     },
     {
         "q": "Что такое GHA?",
-        "expected_file": "05_tlog",
+        "expected_files": ["05_tlog", "07_faq_expedition"],
         "expected_refused": False,
     },
 ]
@@ -93,16 +95,16 @@ def evaluate_one(api: str, item: dict[str, Any]) -> dict[str, Any]:
     started = time.perf_counter()
     response = ask(api, item["q"])
     elapsed_ms = int((time.perf_counter() - started) * 1000)
-    expected_file = item.get("expected_file")
+    expected_files: list[str] = item.get("expected_files") or []
     sources = response.get("sources") or []
     files = [s.get("file") or "" for s in sources]
 
     hit_at_1 = 0
     hit_at_5 = 0
     rank = None
-    if expected_file:
+    if expected_files:
         for idx, fname in enumerate(files):
-            if expected_file in fname:
+            if any(exp in fname for exp in expected_files):
                 hit_at_5 = 1
                 if idx == 0:
                     hit_at_1 = 1
@@ -114,7 +116,7 @@ def evaluate_one(api: str, item: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "q": item["q"],
-        "expected_file": expected_file,
+        "expected_files": expected_files,
         "expected_refused": item.get("expected_refused", False),
         "top_files": files[:5],
         "status": response.get("status"),

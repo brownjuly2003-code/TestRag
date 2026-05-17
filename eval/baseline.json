@@ -1,0 +1,253 @@
+{
+  "summary": {
+    "total": 10,
+    "answerable_total": 9,
+    "refusal_total": 1,
+    "hit@1": 0.6667,
+    "hit@5": 0.8889,
+    "mrr": 0.7593,
+    "refusal_accuracy": 1.0,
+    "avg_latency_ms": 5076,
+    "avg_confidence": 0.8514
+  },
+  "rows": [
+    {
+      "q": "Что такое controlled zone?",
+      "expected_files": [
+        "01_hr_pol_safety",
+        "07_faq_expedition"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "07_faq_expedition.md",
+        "01_hr_pol_safety.md",
+        "05_tlog_regulation_waybill.md",
+        "01_hr_pol_safety.md",
+        "03_legal_contract_expedition_general.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 1.0,
+      "latency_ms": 12176,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "65ae232f-01cf-4675-b9a6-88de92bdcc50"
+    },
+    {
+      "q": "Какие документы нужны для отправки dangerous goods авиатранспортом?",
+      "expected_files": [
+        "06_comp",
+        "05_tlog_regulation_dangerous_goods",
+        "07_faq_expedition"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "07_faq_claims_procedure.md",
+        "03_legal_contract_termination_checklist.md",
+        "03_legal_contract_supply_goods.md",
+        "03_legal_contract_expedition_general.md",
+        "03_legal_contract_services_general.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.719,
+      "latency_ms": 4509,
+      "hit@1": 0,
+      "hit@5": 0,
+      "rank": null,
+      "request_log_id": "d9756f46-fd37-4cba-9155-4fe2af70bdab"
+    },
+    {
+      "q": "Какие основания для досрочного расторжения трудового договора?",
+      "expected_files": [
+        "07_faq_dismissal",
+        "03_legal_contract_termination"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "01_hr_probation_procedure.md",
+        "02_hr_tmp_employment_contract.md",
+        "03_legal_contract_termination_checklist.md",
+        "03_legal_contract_termination_checklist.md",
+        "07_faq_probation.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 1.0,
+      "latency_ms": 5305,
+      "hit@1": 0,
+      "hit@5": 1,
+      "rank": 3,
+      "request_log_id": "26709b00-8a05-4e24-a398-ad43762ec2c3"
+    },
+    {
+      "q": "Что такое AWB и MAWB?",
+      "expected_files": [
+        "05_tlog",
+        "07_faq_expedition"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "07_faq_expedition.md",
+        "05_tlog_regulation_waybill.md",
+        "05_tlog_contract_transport_road.md",
+        "05_tlog_regulation_waybill.md",
+        "05_tlog_regulation_customs_clearance.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.9976,
+      "latency_ms": 3456,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "fc6f1209-c46c-47bd-849c-46f1c788d74f"
+    },
+    {
+      "q": "Какой испытательный срок по ТК РФ?",
+      "expected_files": [
+        "01_hr_probation",
+        "07_faq_probation"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "01_hr_probation_procedure.md",
+        "07_faq_probation.md",
+        "01_hr_probation_procedure.md",
+        "02_hr_tmp_add_agreement.md",
+        "02_hr_tmp_employment_contract.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 1.0,
+      "latency_ms": 4220,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "bce110a0-c957-43bf-9a4c-63f0640efd19"
+    },
+    {
+      "q": "Какой максимальный размер ULD для авиаперевозки?",
+      "expected_files": [
+        "05_tlog",
+        "07_faq_expedition"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "05_tlog_regulation_waybill.md",
+        "07_faq_expedition.md",
+        "07_faq_expedition.md",
+        "05_tlog_regulation_waybill.md",
+        "07_faq_claims_procedure.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 1.0,
+      "latency_ms": 3659,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "3948f7a4-a506-48d8-a440-e232d796b0b5"
+    },
+    {
+      "q": "Как составить претензию контрагенту?",
+      "expected_files": [
+        "04_legal_cla",
+        "07_faq_claims_procedure"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "04_legal_claim_cargo_damage.md",
+        "04_legal_claim_non_payment.md",
+        "04_legal_claim_late_delivery.md",
+        "04_legal_claim_defective_goods.md",
+        "04_legal_claim_cargo_damage.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.5717,
+      "latency_ms": 12894,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "1dd7177e-d2b7-4a72-83ac-c2d94be0fa3c"
+    },
+    {
+      "q": "Какие правила для cutoff time в авиагрузовых перевозках?",
+      "expected_files": [
+        "05_tlog",
+        "07_faq_expedition"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "03_legal_contract_cargo_transport_road.md",
+        "05_tlog_contract_transport_road.md",
+        "03_legal_contract_cargo_transport_road.md",
+        "03_legal_contract_cargo_transport_road.md",
+        "07_faq_expedition.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 1.0,
+      "latency_ms": 1871,
+      "hit@1": 0,
+      "hit@5": 1,
+      "rank": 2,
+      "request_log_id": "36fbbca9-1271-49d1-ace9-3976f765740c"
+    },
+    {
+      "q": "Какие документы нужны для отправки лития морем?",
+      "expected_files": [],
+      "expected_refused": true,
+      "top_files": [
+        "07_faq_claims_procedure.md",
+        "03_legal_contract_termination_checklist.md",
+        "06_comp_policy_commercial_secret.md",
+        "06_comp_policy_commercial_secret.md",
+        "07_faq_contract_templates.md"
+      ],
+      "status": "unanswerable",
+      "refused": true,
+      "refusal_correct": true,
+      "confidence": 0.2405,
+      "latency_ms": 951,
+      "hit@1": 0,
+      "hit@5": 0,
+      "rank": null,
+      "request_log_id": "0d20ead2-edbc-4db8-a9f2-20c5c33585ed"
+    },
+    {
+      "q": "Что такое GHA?",
+      "expected_files": [
+        "05_tlog",
+        "07_faq_expedition"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "07_faq_expedition.md",
+        "01_hr_pol_safety.md",
+        "04_legal_claim_cargo_damage.md",
+        "04_legal_claim_defective_goods.md",
+        "04_legal_claim_cargo_damage.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.9853,
+      "latency_ms": 1725,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "903c2130-6158-445c-a42a-58b75ff63b6a"
+    }
+  ]
+}

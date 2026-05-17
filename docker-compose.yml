@@ -4,10 +4,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-testrag}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required — set strong value in .env}
       POSTGRES_DB: ${POSTGRES_DB:-testrag}
-    ports:
-      - "5432:5432"
+    # Sprint 5 hardening: postgres port НЕ публикуется наружу (codex-audit#3 risk).
+    # Доступ только через docker-network к rag-api/n8n. Для debug через хост — `docker compose exec postgres psql`.
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -22,7 +24,7 @@ services:
       context: ./rag-api
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-testrag}:${POSTGRES_PASSWORD:-change-me-local}@postgres:5432/${POSTGRES_DB:-testrag}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-testrag}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-testrag}
       DOCS_PATH: ${DOCS_PATH:-/app/data/sample_docs}
       DOCS_MANIFEST_PATH: ${DOCS_MANIFEST_PATH:-}
       MIN_CONFIDENCE: ${MIN_CONFIDENCE:-0.35}
@@ -38,9 +40,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=3).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
 
   n8n:
-    image: n8nio/n8n:latest
+    image: n8nio/n8n:1.103.2
     restart: unless-stopped
     environment:
       DB_TYPE: postgresdb
@@ -48,14 +56,16 @@ services:
       DB_POSTGRESDB_PORT: 5432
       DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-testrag}
       DB_POSTGRESDB_USER: ${POSTGRES_USER:-testrag}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_POSTGRESDB_SCHEMA: n8n
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-me-32-characters-minimum}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY required — generate 32+ chars in .env}
       N8N_HOST: localhost
       N8N_PORT: 5678
       N8N_PROTOCOL: http
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_SECURE_COOKIE: "false"
+      # N8N_BLOCK_ENV_ACCESS_IN_NODE=false требуется текущим Whitelist node (читает $env.ALLOWED_TELEGRAM_USER_IDS).
+      # TODO Sprint 6: вынести whitelist в FastAPI endpoint, после этого set=true. Issue: codex-audit#3.
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
       RAG_API_URL: ${RAG_API_URL:-http://rag-api:8000}
@@ -70,7 +80,7 @@ services:
       postgres:
         condition: service_healthy
       rag-api:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   postgres_data:

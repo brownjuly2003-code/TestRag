@@ -1,10 +1,32 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import httpx
 
 from .rag import SearchResult
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_choice_content(data: object) -> str | None:
+    """Sprint 5 #4 (codex-audit#2.3): guard `data['choices'][0]['message']['content']`
+    индексацию. Mistral / OpenAI могут вернуть пустой `choices`, отсутствующий
+    `message`, тип `None` — раньше падало `KeyError`/`IndexError` в 500."""
+    if not isinstance(data, dict):
+        return None
+    choices = data.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return None
+    first = choices[0]
+    if not isinstance(first, dict):
+        return None
+    message = first.get("message")
+    if not isinstance(message, dict):
+        return None
+    content = message.get("content")
+    return content if isinstance(content, str) else None
 
 
 class MistralChatClient:
@@ -62,13 +84,20 @@ class MistralChatClient:
                 )
                 response.raise_for_status()
                 data = response.json()
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
+            logger.warning("mistral.chat http_error endpoint=chat/completions error=%s", exc)
+            return None, usage
+        except ValueError as exc:
+            logger.warning("mistral.chat invalid_json endpoint=chat/completions error=%s", exc)
             return None, usage
 
         api_usage = data.get("usage", {}) or {}
         usage["prompt_tokens"] = api_usage.get("prompt_tokens")
         usage["completion_tokens"] = api_usage.get("completion_tokens")
-        return data["choices"][0]["message"]["content"], usage
+        content = _extract_choice_content(data)
+        if content is None:
+            logger.warning("mistral.chat empty_choices model=%s", self.model)
+        return content, usage
 
     async def document_plan(self, system_prompt: str, user_prompt: str) -> dict | None:
         if not self.enabled:
@@ -83,16 +112,25 @@ class MistralChatClient:
             ],
         }
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                "https://api.mistral.ai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.post(
+                    "https://api.mistral.ai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPError as exc:
+            logger.warning("mistral.doc_plan http_error error=%s", exc)
+            return None
+        except ValueError as exc:
+            logger.warning("mistral.doc_plan invalid_json error=%s", exc)
+            return None
 
-        content = data["choices"][0]["message"]["content"]
+        content = _extract_choice_content(data)
+        if content is None:
+            return None
         return _loads_json_object(content)
 
 
@@ -100,10 +138,32 @@ class MistralEmbeddingClient:
     def __init__(self, api_key: str, model: str) -> None:
         self.api_key = api_key
         self.model = model
+        # Sprint 5 #4 (codex-audit#6.2): pin embedding dim после первого успешного вызова —
+        # подменили модель → log warning при первом несовпадении.
+        self._observed_dim: int | None = None
 
     @property
     def enabled(self) -> bool:
         return bool(self.api_key)
+
+    @property
+    def observed_dim(self) -> int | None:
+        return self._observed_dim
+
+    def _check_dim(self, vec: list[float] | None) -> None:
+        if not isinstance(vec, list) or not vec:
+            return
+        if self._observed_dim is None:
+            self._observed_dim = len(vec)
+            return
+        if len(vec) != self._observed_dim:
+            logger.warning(
+                "mistral.embed dim_mismatch expected=%s actual=%s model=%s — "
+                "vector likely drops to cosine=0 silently",
+                self._observed_dim,
+                len(vec),
+                self.model,
+            )
 
     def embed_texts(self, texts: list[str]) -> list[list[float] | None]:
         if not self.enabled or not texts:
@@ -119,10 +179,19 @@ class MistralEmbeddingClient:
                 )
                 response.raise_for_status()
                 data = response.json()
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
+            logger.warning("mistral.embed http_error endpoint=embeddings batch=%d error=%s", len(texts), exc)
+            return [None for _ in texts]
+        except ValueError as exc:
+            logger.warning("mistral.embed invalid_json batch=%d error=%s", len(texts), exc)
             return [None for _ in texts]
 
-        embeddings = [item["embedding"] for item in data.get("data", [])]
+        items = data.get("data", []) if isinstance(data, dict) else []
+        embeddings: list[list[float] | None] = []
+        for item in items:
+            vec = item.get("embedding") if isinstance(item, dict) else None
+            self._check_dim(vec)
+            embeddings.append(vec if isinstance(vec, list) else None)
         return embeddings + [None for _ in range(max(0, len(texts) - len(embeddings)))]
 
     async def embed_query(self, text: str) -> list[float] | None:
@@ -139,14 +208,27 @@ class MistralEmbeddingClient:
                 )
                 response.raise_for_status()
                 data = response.json()
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
+            logger.warning("mistral.embed_query http_error error=%s", exc)
+            return None
+        except ValueError as exc:
+            logger.warning("mistral.embed_query invalid_json error=%s", exc)
             return None
 
-        items = data.get("data", [])
-        return items[0]["embedding"] if items else None
+        items = data.get("data", []) if isinstance(data, dict) else []
+        if not items:
+            return None
+        first = items[0]
+        vec = first.get("embedding") if isinstance(first, dict) else None
+        if not isinstance(vec, list):
+            return None
+        self._check_dim(vec)
+        return vec
 
 
 def _loads_json_object(content: str) -> dict | None:
+    """Sprint 5 #4 (codex-audit#7.3): catch JSONDecodeError, верни None — раньше
+    падало 500 при невалидном JSON в LLM-ответе на document plan."""
     stripped = content.strip()
     if stripped.startswith("```"):
         stripped = stripped.strip("`")
@@ -156,4 +238,8 @@ def _loads_json_object(content: str) -> dict | None:
     end = stripped.rfind("}")
     if start == -1 or end == -1 or end < start:
         return None
-    return json.loads(stripped[start : end + 1])
+    try:
+        return json.loads(stripped[start : end + 1])
+    except json.JSONDecodeError as exc:
+        logger.warning("mistral.doc_plan json_decode_error error=%s payload_head=%r", exc, stripped[:120])
+        return None

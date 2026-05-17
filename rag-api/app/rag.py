@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 import math
+import os
 import re
 from typing import Any
 
@@ -140,6 +141,15 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
 
 
 class HybridRetriever:
+    # Sprint 5 #5: hybrid retrieval веса параметризуются через env.
+    # Defaults — текущий Sprint 5 baseline (MRR=0.76).
+    # Меняй только осознанно: каждое изменение → перепрогон scripts/eval_retrieval.py.
+    BM25_WEIGHT = float(os.getenv("HYBRID_BM25_WEIGHT", "0.65"))
+    VECTOR_WEIGHT = float(os.getenv("HYBRID_VECTOR_WEIGHT", "0.35"))
+    COVERAGE_EXP = float(os.getenv("HYBRID_COVERAGE_EXP", "2.0"))
+    SECTION_BOOST_PER_TERM = float(os.getenv("HYBRID_SECTION_BOOST_PER_TERM", "0.10"))
+    SECTION_BOOST_MAX = float(os.getenv("HYBRID_SECTION_BOOST_MAX", "0.30"))
+
     def __init__(self, chunks: list[DocumentChunk], k1: float = 1.5, b: float = 0.75) -> None:
         self.chunks = chunks
         self.k1 = k1
@@ -173,9 +183,13 @@ class HybridRetriever:
             if has_vector and chunk.embedding:
                 vector_score = (cosine_similarity(query_embedding or [], chunk.embedding) + 1) / 2
             coverage = len(query_terms.intersection(self.term_frequencies[index])) / len(query_terms)
-            base_score = (0.65 * normalized_bm25 + 0.35 * vector_score) if has_vector else normalized_bm25
+            base_score = (
+                self.BM25_WEIGHT * normalized_bm25 + self.VECTOR_WEIGHT * vector_score
+                if has_vector
+                else normalized_bm25
+            )
             section_boost = self._section_boost(query_terms, chunk)
-            final_score = base_score * coverage * coverage * (1.0 + section_boost)
+            final_score = base_score * (coverage ** self.COVERAGE_EXP) * (1.0 + section_boost)
             results.append(
                 SearchResult(
                     chunk=chunk,
@@ -187,8 +201,8 @@ class HybridRetriever:
 
         return sorted(results, key=lambda item: item.final_score, reverse=True)[:top_k]
 
-    @staticmethod
-    def _section_boost(query_terms: set[str], chunk: DocumentChunk) -> float:
+    @classmethod
+    def _section_boost(cls, query_terms: set[str], chunk: DocumentChunk) -> float:
         section = (chunk.metadata.get("section") or "") if chunk.metadata else ""
         if not section or not query_terms:
             return 0.0
@@ -198,8 +212,8 @@ class HybridRetriever:
         overlap = len(query_terms & section_tokens)
         if not overlap:
             return 0.0
-        # Каждое совпадение query-term с section-token даёт +10% к score, потолок +30%.
-        return min(0.30, overlap * 0.10)
+        # Каждое совпадение query-term с section-token даёт +N% к score, потолок +M%.
+        return min(cls.SECTION_BOOST_MAX, overlap * cls.SECTION_BOOST_PER_TERM)
 
     def _build_document_frequencies(self) -> Counter[str]:
         frequencies: Counter[str] = Counter()
