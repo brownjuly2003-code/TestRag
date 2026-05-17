@@ -227,7 +227,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendChatAction",
+        "url": "=https://api.telegram.org/bot{{ $vars.TELEGRAM_BOT_TOKEN }}/sendChatAction",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, action: 'typing' }) }}",
@@ -287,7 +287,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/editMessageReplyMarkup",
+        "url": "=https://api.telegram.org/bot{{ $vars.TELEGRAM_BOT_TOKEN }}/editMessageReplyMarkup",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, message_id: $json.message_id, reply_markup: { inline_keyboard: [[{ text: '👎 Неточно', callback_data: 'feedback:bad_inaccurate:' + ($json.request_log_id || '') }, { text: '🕰️ Устарело', callback_data: 'feedback:bad_outdated:' + ($json.request_log_id || '') }, { text: '🧑‍💼 Нужен человек', callback_data: 'feedback:bad_human:' + ($json.request_log_id || '') }]] } }) }}",
@@ -448,7 +448,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "url": "=https://api.telegram.org/bot{{ $vars.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.inline_keyboard ? { chat_id: $json.chat_id, text: $json.text, parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: $json.inline_keyboard, reply_to_message_id: $json.reply_to_message_id } : { chat_id: $json.chat_id, text: $json.text, parse_mode: 'HTML', disable_web_page_preview: true, reply_to_message_id: $json.reply_to_message_id }) }}",
@@ -591,7 +591,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendChatAction",
+        "url": "=https://api.telegram.org/bot{{ $vars.TELEGRAM_BOT_TOKEN }}/sendChatAction",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ chat_id: $node['Whitelist'].json.chat_id, action: 'typing' }) }}",

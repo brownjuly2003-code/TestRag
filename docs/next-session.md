@@ -7,7 +7,7 @@
 ```text
 Продолжаем D:\TestRag.
 
-HEAD будет на свежем коммите EOS-сессии 2026-05-17 (eval-driven overlap correction + Sprint 6 #1 partial workaround + live TG E2E confirmed).
+HEAD будет на свежем коммите EOS-сессии 2026-05-17 night (Sprint 6 #1 ЗАКРЫТ — TG HTTP-ноды на `$vars.TELEGRAM_BOT_TOKEN`, `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` дефолт).
 
 Базовые цифры:
 - pytest: 192/192 зелёные.
@@ -19,7 +19,7 @@ HEAD будет на свежем коммите EOS-сессии 2026-05-17 (ev
 Стек:
 - FastAPI hybrid retrieval (token splitter cl100k_base 500/75, BM25 + vector + section rerank + frontmatter-driven metadata, `/ask?debug=true`).
 - Mistral (singleton httpx).
-- n8n 32 узла (pin 1.103.2, см. known-issues #17 про CLI workaround). Sprint 6 #1 ПОКА PARTIAL — HTTP nodes ещё читают $env (issue #18), N8N_BLOCK_ENV_ACCESS_IN_NODE=false override через .env.
+- n8n 32 узла (pin 1.103.2, см. known-issues #17 про CLI workaround). Sprint 6 #1 закрыт (issue #18): 4 TG HTTP-ноды читают токен из `$vars.TELEGRAM_BOT_TOKEN` (variable инсертится в `n8n.variables` напрямую через SQL, license-gate только на UI create). `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` дефолт.
 - Telegram @AIagentJu_bot через cloudflared tunnel (testrag-cloudflared, ephemeral trycloudflare).
 
 Что закрыто 2026-05-17 EOS (full day):
@@ -30,11 +30,14 @@ HEAD будет на свежем коммите EOS-сессии 2026-05-17 (ev
 - ✅ Schema fix: ALTER TABLE n8n."user" ADD COLUMN role GENERATED ALWAYS AS ("roleSlug") STORED.
 - ✅ docs/known-issues.md +#17/#18/#19, docs/adr/0004-chunk-overlap-75.md, docs/findings/2026-05-17-overlap-50-regression.md.
 
+Что закрыто 2026-05-17 night (post-EOS):
+- ✅ **Sprint 6 #1 закрыт (issue #18)**: 4 TG HTTP-ноды переключены с `$env.TELEGRAM_BOT_TOKEN` на `$vars.TELEGRAM_BOT_TOKEN`. Переменная инсертится в `n8n.variables` напрямую через SQL (UI create gated на license, но read-path в CE работает без license-check). `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` дефолт восстановлен. Smoke 5/6 ✓ (тот же baseline). Подход через `predefinedCredentialType + $credentials` исключён (n8n фильтрует credentials по `has:authenticate`, у `telegramApi` его нет).
+
 Что НЕ закрыто (на следующую сессию):
-- ⏸ Sprint 6 #1 finish (issue #18): refactor 4 TG HTTP nodes на `authentication: predefinedCredentialType, nodeCredentialType: 'telegramApi'` (НЕ через $credentials.X expression — не работает, попытка дала пустой токен → 404). После refactor вернуть `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` default.
 - ⏸ Sprint 6 #2 OpenAPI dump (если есть). #3-#5 closed (`881c5f2`, `470b692`, `b7812b9`).
 - ⏸ Investigate `📖 Развернуть expand` race в TG smoke (single failure из 6). Возможно scripts/smoke_tg_e2e.py не дожидается reply2.id refresh после clarify click.
 - ⏸ n8n upgrade за пределы 1.103.2 (issue #17) с regression-тестом workflow.
+- ⏸ `scripts/seed_n8n_vars.py` — автоматизация seed `TELEGRAM_BOT_TOKEN` в `n8n.variables` для clean-DB onboarding (см. known-issues #18 fix section). Сейчас ручной шаг при reset.
 
 Перед работой:
 - Не выводить .env, токены, ключи в чат.
@@ -52,6 +55,16 @@ cd D:/TestRag
 docker compose up -d
 docker ps --format "table {{.Names}}\t{{.Status}}"
 curl http://localhost:8000/health   # chunk_count=583 expected
+
+# 0.5. Seed n8n variable TELEGRAM_BOT_TOKEN (нужно при clean n8n DB, иначе $vars.X пустой → TG 404)
+python -c "
+import os, pathlib, re, uuid
+token = re.search(r'TELEGRAM_BOT_TOKEN=(\S+)', pathlib.Path('.env').read_text(encoding='utf-8')).group(1)
+sql = f\"INSERT INTO n8n.variables (id, key, type, value) VALUES ('{uuid.uuid4()}', 'TELEGRAM_BOT_TOKEN', 'string', '{token}') ON CONFLICT (key) WHERE \\\"projectId\\\" IS NULL DO UPDATE SET value=EXCLUDED.value;\"
+pathlib.Path('.tmp/seed_var.sql').write_text(sql, encoding='utf-8')
+"
+docker cp .tmp/seed_var.sql testrag-postgres-1:/tmp/seed_var.sql
+MSYS_NO_PATHCONV=1 docker exec testrag-postgres-1 psql -U testrag -d testrag -f //tmp/seed_var.sql
 
 # 1. Cloudflared tunnel (ephemeral — нужно при каждом session start)
 docker rm -f testrag-cloudflared 2>/dev/null
@@ -115,7 +128,7 @@ python -m pytest -p no:schemathesis rag-api/tests/test_openapi_contract.py  # 4 
 |---|---|---|---|---|
 | `testrag-postgres-1` | `pgvector/pgvector:pg16` | pg_isready healthcheck | **expose only** | + alias column `n8n.user.role` (workaround #17) |
 | `testrag-rag-api-1` | local build | urllib /health (timeout=3) | `8000:8000` | overlap=75, min_conf=0.25 |
-| `testrag-n8n-1` | `n8nio/n8n:1.103.2` (pinned) | n8n healthz | `5678:5678` | `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` через .env (issue #18) |
+| `testrag-n8n-1` | `n8nio/n8n:1.103.2` (pinned) | n8n healthz | `5678:5678` | `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` (default, issue #18 closed). TG token читается из `n8n.variables.TELEGRAM_BOT_TOKEN` через `$vars` |
 | `testrag-cloudflared` | cloudflare/cloudflared | runtime registration | none (outbound only) | ephemeral, пересоздавать при рестарте |
 
 POSTGRES_PASSWORD и N8N_ENCRYPTION_KEY — `${VAR:?required}`.
@@ -130,7 +143,7 @@ POSTGRES_PASSWORD и N8N_ENCRYPTION_KEY — `${VAR:?required}`.
 - **Smoke** — `scripts/smoke_tg_e2e.py` (N1/N2/N3/N4 buttons), `scripts/smoke_followup.py`.
 - **Cross-audit** — `kimi_audit_17_05_26.md` (Kimi полный аудит).
 - **Findings** — `docs/findings/2026-05-17-{sprint4-retrieval-polish,prev-n-qa-ablation,overlap-50-regression}.md`.
-- **Known issues** — `docs/known-issues.md` (19 issues, #14/#16 RESOLVED/known, #17/#18/#19 NEW).
+- **Known issues** — `docs/known-issues.md` (19 issues, #14/#16/#18 RESOLVED, #17/#19 NEW/known).
 - **ADR** — `docs/adr/0001-n8n-as-bot-orchestrator.md`, `0002-in-memory-bm25-hybrid-retriever.md`, `0003-mistral-as-llm-and-embeddings.md`, `0004-chunk-overlap-75.md`.
 - **OpenAPI** — `docs/openapi.yaml/.json` (12 paths, 23 schemas).
 - **Workflow patch scripts** — `.tmp/patch_workflow.py`, `.tmp/find_env_refs.py`, `.tmp/update_workflow.sql` (gitignored).
