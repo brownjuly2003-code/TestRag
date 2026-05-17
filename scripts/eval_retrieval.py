@@ -47,7 +47,7 @@ GOLDEN_QUESTIONS: list[dict[str, Any]] = [
     },
     {
         "q": "Какой испытательный срок по ТК РФ?",
-        "expected_file": "01_hr_pol",
+        "expected_file": "01_hr_probation",
         "expected_refused": False,
     },
     {

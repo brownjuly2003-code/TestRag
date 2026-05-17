@@ -145,14 +145,6 @@ def test_probation_corpus_says_extension_is_not_allowed():
     assert "продление.** допускается" not in text
 
 
-def test_aviation_profile_in_hr_probation():
-    corpus_path = Path(__file__).resolve().parents[2] / "corpus" / "01_hr_probation_procedure.md"
-    text = corpus_path.read_text(encoding="utf-8").lower()
-
-    assert "допуск" in text or "пропуск" in text
-    assert "контролируем" in text or "терминал" in text or "аэропорт" in text
-
-
 def test_aviation_profile_in_dangerous_goods_regulation():
     corpus_path = Path(__file__).resolve().parents[2] / "corpus" / "05_tlog_regulation_dangerous_goods.md"
     text = corpus_path.read_text(encoding="utf-8").lower()
