@@ -298,26 +298,52 @@ class PostgresStore:
             cursor = conn.cursor()
             cursor.execute(
                 """
+                with categorized as (
+                    select distinct
+                        d.id,
+                        d.file_name,
+                        case
+                            when file_name ~ '^[0-9]+_hr_pol' then '01_hr_pol'
+                            when file_name ~ '^[0-9]+_hr_(tmp|tpl)' then '02_hr_tpl'
+                            when file_name ~ '^[0-9]+_legal_con' then '03_legal_con'
+                            when file_name ~ '^[0-9]+_legal_cla' then '04_legal_cla'
+                            when file_name ~ '^[0-9]+_tlog' then '05_tlog'
+                            when file_name ~ '^[0-9]+_comp' then '06_comp'
+                            when file_name ~ '^[0-9]+_faq' then '07_faq'
+                            else 'other'
+                        end as category
+                    from documents d
+                    join document_chunks c on c.document_id = d.id
+                ),
+                top_samples as (
+                    select category, array_agg(file_name order by file_name) as files
+                    from (
+                        select category, file_name,
+                            row_number() over (partition by category order by file_name) as rn
+                        from categorized
+                    ) ranked
+                    where rn <= 2
+                    group by category
+                )
                 select
-                    case
-                        when file_name ~ '^[0-9]+_hr_pol' then '01_hr_pol'
-                        when file_name ~ '^[0-9]+_hr_(tmp|tpl)' then '02_hr_tpl'
-                        when file_name ~ '^[0-9]+_legal_con' then '03_legal_con'
-                        when file_name ~ '^[0-9]+_legal_cla' then '04_legal_cla'
-                        when file_name ~ '^[0-9]+_tlog' then '05_tlog'
-                        when file_name ~ '^[0-9]+_comp' then '06_comp'
-                        when file_name ~ '^[0-9]+_faq' then '07_faq'
-                        else 'other'
-                    end as category,
-                    count(distinct d.id) as doc_count
-                from documents d
-                join document_chunks c on c.document_id = d.id
-                group by 1
-                order by 1
+                    c.category,
+                    count(*) as doc_count,
+                    coalesce(s.files, '{}'::text[]) as sample_files
+                from categorized c
+                left join top_samples s on s.category = c.category
+                group by c.category, s.files
+                order by c.category
                 """
             )
             rows = cursor.fetchall()
-        return [{"category": row[0], "doc_count": int(row[1])} for row in rows]
+        return [
+            {
+                "category": row[0],
+                "doc_count": int(row[1]),
+                "sample_files": list(row[2] or []),
+            }
+            for row in rows
+        ]
 
     def get_request_source(self, request_log_id: str, idx: int) -> dict[str, Any] | None:
         if not self.enabled or not request_log_id or idx < 0:

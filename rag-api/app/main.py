@@ -94,6 +94,7 @@ class CorpusCategory(BaseModel):
     category: str
     label: str
     doc_count: int
+    sample_files: list[str] = []
 
 
 class CorpusSummaryResponse(BaseModel):
@@ -808,6 +809,7 @@ def docs_summary() -> CorpusSummaryResponse:
             category=row["category"],
             label=CORPUS_CATEGORY_LABELS.get(row["category"], row["category"]),
             doc_count=row["doc_count"],
+            sample_files=row.get("sample_files", []),
         )
         for row in rows
     ]

@@ -484,15 +484,33 @@ def test_format_history_handles_empty():
 def test_format_docs_renders_categories_with_total():
     result = _run_format("Format Docs", {
         "categories": [
-            {"category": "01_hr_pol", "label": "HR — политики", "doc_count": 60},
-            {"category": "07_faq", "label": "FAQ", "doc_count": 8},
+            {"category": "01_hr_pol", "label": "HR — политики", "doc_count": 60, "sample_files": []},
+            {"category": "07_faq", "label": "FAQ", "doc_count": 8, "sample_files": []},
         ],
         "total_docs": 68,
     })
     text = result["text"]
-    assert "Корпус: 68 документов" in text
-    assert "• HR — политики — 60" in text
-    assert "• FAQ — 8" in text
+    assert "Корпус знаний: 68 документов" in text
+    assert "HR — политики" in text and "(60)" in text
+    assert "FAQ" in text and "(8)" in text
+
+
+def test_format_docs_includes_sample_file_names():
+    """BCG polish: на каждой категории показываем 1-2 sample doc названия для конкретики."""
+    result = _run_format("Format Docs", {
+        "categories": [
+            {
+                "category": "01_hr_pol",
+                "label": "HR — политики",
+                "doc_count": 13,
+                "sample_files": ["01_hr_pol_safety.md", "01_hr_pol_attendance.md"],
+            },
+        ],
+        "total_docs": 13,
+    })
+    text = result["text"]
+    assert "<code>01_hr_pol_safety.md</code>" in text
+    assert "<code>01_hr_pol_attendance.md</code>" in text
 
 
 def _run_format_feedback(category: str | None, chat_id: int = 42) -> dict:
@@ -740,3 +758,107 @@ def test_format_answer_md_conversion_does_not_re_escape_safe_tags():
     assert "&lt;script&gt;" in text
     assert "<b>жирный</b>" in text
     assert "<script>" not in text
+
+
+def test_format_answer_high_confidence_chip():
+    result = _run_format_answer(
+        {
+            "answer": "Краткий ответ про controlled zone.",
+            "confidence": 0.85,
+            "request_log_id": "rl",
+            "sources": [{"file": "01_hr.md", "section": "X", "score": 0.9}],
+        }
+    )
+    text = result["text"]
+    assert "🟢" in text
+    assert "Высокая уверенность" in text
+    # bare score должен исчезнуть из sources block (anti-pattern)
+    assert "score 0.9" not in text
+
+
+def test_format_answer_medium_confidence_chip():
+    result = _run_format_answer(
+        {
+            "answer": "Ответ.",
+            "confidence": 0.55,
+            "request_log_id": "rl",
+            "sources": [],
+        }
+    )
+    text = result["text"]
+    assert "🟡" in text
+    assert "Средняя уверенность" in text
+
+
+def test_format_answer_low_confidence_chip():
+    result = _run_format_answer(
+        {
+            "answer": "Возможно.",
+            "confidence": 0.2,
+            "request_log_id": "rl",
+            "sources": [],
+        }
+    )
+    text = result["text"]
+    assert "🟠" in text
+    assert "Низкая уверенность" in text
+
+
+def test_format_answer_refusal_shows_next_steps():
+    """API вернул refused=True → блок 'Что делать дальше' + 🧑‍💼 эскалация."""
+    result = _run_format_answer(
+        {
+            "answer": "Данных недостаточно для ответа.",
+            "confidence": 0.0,
+            "refused": True,
+            "request_log_id": "rl",
+            "sources": [],
+        }
+    )
+    text = result["text"]
+    assert "Что делать дальше" in text
+    assert "/docs" in text
+    assert "🧑‍💼" in text
+    # на refusal chip не показываем (бесполезен)
+    assert "Высокая уверенность" not in text
+    assert "Средняя уверенность" not in text
+    assert "Низкая уверенность" not in text
+
+
+def test_format_answer_refusal_detection_by_text():
+    """Mistral вернул 'Данных недостаточно' но refused=false (LLM не помечает) — детектим по тексту."""
+    result = _run_format_answer(
+        {
+            "answer": "Данных недостаточно для ответа на этот вопрос.",
+            "confidence": 0.9,
+            "request_log_id": "rl",
+            "sources": [{"file": "a.md", "section": "X", "score": 0.5}],
+        }
+    )
+    text = result["text"]
+    assert "Что делать дальше" in text
+    # на refusal источники называются 'Ближайшие документы' а не 'Источники'
+    assert "Ближайшие документы" in text
+
+
+def test_format_answer_sources_have_no_bare_score():
+    """Anti-pattern: bare numeric score в UI. Memory: feedback_concrete_test_questions / BCG-bar."""
+    result = _run_format_answer(
+        {
+            "answer": "Ответ.",
+            "confidence": 0.8,
+            "request_log_id": "rl",
+            "sources": [
+                {"file": "f1.md", "section": "S1", "score": 0.91},
+                {"file": "f2.md", "section": "S2", "score": 0.74},
+            ],
+        }
+    )
+    text = result["text"]
+    assert "score 0.91" not in text
+    assert "score 0.74" not in text
+    assert "0.91" not in text
+    assert "0.74" not in text
+    # источники остаются с file + section в clean формате
+    assert "<code>f1.md</code> — S1" in text
+    assert "<code>f2.md</code> — S2" in text
