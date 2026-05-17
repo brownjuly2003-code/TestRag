@@ -6,23 +6,23 @@
 
 ## Current Status
 
-Updated: 2026-05-17 (HEAD `50699fe` — Sprint 6 #1/#6/#7 closed + overlap rollback к ТЗ).
+Updated: 2026-05-17 night (HEAD `8d7adf2` — Sprint 6 #1 closure через $vars + 📖 expand fix + /expand HTML escape + n8n upgrade deferred).
 
 - [x] Docker Compose поднят: `postgres` (expose-only, не публикуется), `rag-api` (с healthcheck), `n8n:1.103.2` (pinned), `cloudflared` (отдельный контейнер).
-- [x] n8n workflow активирован, публичный webhook через cloudflare tunnel (trycloudflare).
+- [x] n8n workflow активирован (**33 узла**, +Format Expand night-fix), публичный webhook через cloudflare tunnel (trycloudflare).
 - [x] Локальный Telegram whitelist для `432751211`.
-- [x] RAG API: `chunk_count=189`, `documents=51` (MVP-47), postgres/mistral/embeddings enabled.
+- [x] RAG API: `chunk_count=583`, `documents=52` (MVP-48 включая `external_tk_rf_chapter_11.md`), postgres/mistral/embeddings enabled, **token-based splitter cl100k_base 500/75, min_conf=0.25**.
 - [x] Postgres tables: documents (+version/effective_from/effective_to/status), document_chunks, request_logs (+latency_ms/llm_model/prompt_tokens/completion_tokens), answer_feedback (+category/free_text/chunk_ids), review_queue (+context jsonb).
-- [x] **pytest 112/112** (`python -m pytest -p no:schemathesis`).
+- [x] `n8n.variables.TELEGRAM_BOT_TOKEN` инсертится через `scripts/seed_n8n_vars.py` (issue #18 fix: `$vars` вместо `$env`, `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` default).
+- [x] **pytest 193/193** (+1 night HTML escape lock-in).
 - [x] **Eval CI gate** активен: `pytest scripts/test_eval_regression.py` (floor MRR ≥0.60, Hit@1 ≥0.50, refusal ≥0.85).
-- [x] Workflow 28 узлов активный (Sprint 3 N1 +4 ветки).
-- [x] Aviation profile pass на 200 corpus-файлов; MVP-47 (+`07_faq_expedition/transport_road/claims_procedure`).
+- [x] Aviation profile pass на 200 corpus-файлов; MVP-48 (+external_tk_rf_chapter_11.md).
 - [x] Sprint 4: aviation pollution revert в HR-шаблонах + не-safety политики (76 файлов).
 - [x] Sprint 5 content enrichment: глоссарий controlled zone / AWB / MAWB / HAWB / ULD / GHA / cutoff / dangerous goods в `07_faq_expedition`, `05_tlog_regulation_waybill`, `01_hr_pol_safety`.
 - [x] BCG demo polish: 🟢/🟡/🟠 confidence chip, refusal next-steps suffix, sources без bare score, /docs sample_files (2 doc-titles на категорию), README hero metrics.
 - [x] LLM robustness guards: `_extract_choice_content`, JSONDecodeError catch, MistralEmbeddingClient._observed_dim warning при dim mismatch.
 - [x] HybridRetriever weights env-параметризованы: HYBRID_{BM25,VECTOR,COVERAGE_EXP,SECTION_BOOST_*}.
-- [x] Live TG E2E ✅ через `scripts/smoke_tg_e2e.py` (Telethon).
+- [x] **Live TG E2E 6/6 ✅** через `scripts/smoke_tg_e2e.py` (Telethon): N1 followup, N2 🔁 clarify + 📖 expand, N3 human handover, N4 reply threading.
 
 ## Eval (10 golden Qs)
 
@@ -139,12 +139,16 @@ Backlog из Kimi+Codex consensus + Kimi audit (`kimi_audit_17_05_26.md`).
 - [x] **#6 N2 Quick-actions** (commit `217b84f`): `POST /clarify` (rerun original Q с top_k=10), `GET /expand` (full chunk content). Format Answer +row 3 (🔁 Уточнить + 📖 Развернуть). n8n workflow +Clarify?/Expand? IF branches +Resolve Clarify/Expand HTTP nodes (28→32 узла). +14 unit-тестов.
 - [x] **#7 Prev-N-QA infrastructure** (commit `50699fe`): `multiturn.py` (`augment_retrieval_query` + `filter_relevant_prev_qas` skip refusal/low-conf), `AskRequest.prev_qa_count: int = 0` opt-in (0..5), augmentation идёт ТОЛЬКО в retrieval (embedding + BM25), не в LLM prompt (защита от дрейфа). `scripts/eval_multiturn.py` — 5 multi-turn cases A/B harness. +15 unit-тестов. **Live A/B отложен** (Docker cold start, см. docs/known-issues.md #16).
 
-## Что НЕ закрыто (defer до подъёма Docker)
+## Sprint 6 EOS+Night closures (2026-05-17 follow-up sessions)
 
-- [ ] **Eval replay при overlap=50** (post commit `f98400b`). Update `eval/baseline.json` если floor проходит. Команда в `docs/next-session.md`.
-- [ ] **Prev-N-QA live A/B**: `python scripts/eval_multiturn.py --output .tmp/eval_multiturn.json` → вписать ΔHit@1 в `docs/findings/2026-05-17-prev-n-qa-ablation.md`.
-- [ ] **TG E2E smoke с 🔁/📖**: расширить `scripts/smoke_tg_e2e.py` чтобы покрыть Sprint 6 #6 кнопки (currently только 📎/👍/👎/🧑‍💼).
-- [ ] **n8n workflow import после правок Sprint 6**: `MSYS_NO_PATHCONV=1 docker compose exec -T n8n n8n import:workflow ...` + activate + restart. См. `docs/next-session.md`.
+- [x] **Eval replay overlap=50 → rollback к 75** (commit `52ed0a5`, ADR-0004): floor-violation подтверждена (MRR 0.78→0.56, refusal 1.00→0.70). MIN_CONFIDENCE drift 0.35→0.25 (issue #19). Final baseline: MRR 0.78, Hit@1 0.67, Hit@5 1.00, refusal_acc 1.00, avg_conf 0.80.
+- [x] **Prev-N-QA live A/B** (commit `52ed0a5`): ΔHit@1=0, ΔHit@5=+0.20, ΔMRR=+0.05. Решение — opt-in default=0.
+- [x] **TG E2E smoke с 🔁/📖**: `scripts/smoke_tg_e2e.py` расширен N2 buttons. **6/6 ✓** на HEAD `254d670` после Format Expand fix.
+- [x] **n8n workflow import после Sprint 6 правок**: SQL UPDATE workaround (issue #17, `.tmp/update_workflow.sql` + docker cp + psql + restart). CLI broken на 1.103.2 (column `User.role does not exist` → ALTER TABLE alias-колонка).
+- [x] **Sprint 6 #1 finish** (commit `a54752a`, closes issue #18): 4 TG HTTP-ноды (Send Typing / Typing FU / Edit Reply Markup / Send Answer) → `$vars.TELEGRAM_BOT_TOKEN` вместо `$env`. `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` default восстановлен. `scripts/seed_n8n_vars.py` для clean-DB onboarding.
+- [x] **📖 expand workflow bug** (commit `254d670`): Resolve Expand отдавал ExpandResponse без chat_id → Send Direct Reply падал TG 400. Insert Format Expand Code-узла (33 узла, было 32). Smoke 6/6.
+- [x] **`/expand` HTML escape** (commit `8d7adf2`): chunk.content шёл в f-string без `html.escape` → TG 400 "can't parse entities" на chunks с `<https://...>`/`M&A`/`P&L`. Latent bug (smoke случайно ловил безопасный chunk).
+- [x] **n8n upgrade research → deferred** (issue #17 resolution в `docs/known-issues.md`): ALTER alias-колонка решила User.role error для runtime+CLI. CLI import всё ещё требует канонической JSON-формы (versionId/createdAt/...) → git noise. SQL UPDATE сохраняет webhook secret. Upgrade пересматривать when scaling/feature/CVE.
 
 ## Sprint 7+ — production hardening (если потребуется)
 
@@ -197,6 +201,9 @@ Backlog из Kimi+Codex consensus + Kimi audit (`kimi_audit_17_05_26.md`).
 | 14 | ~~n8n coupling (whitelist/copy в JS nodes)~~ | ✅ RESOLVED Sprint 6 #1 (`2e74a17`) | — |
 | 15 | Postgres 127.0.0.1 binding blocked on Windows Docker | low (Hyper-V dynamic port reservation) | expose-only, firewall в prod |
 | 16 | Docker Desktop cold start ≥10мин на Win11+WSL2 | medium (блокирует live eval/smoke) | pre-warm Docker UI заранее, defer eval-replay |
+| 17 | n8n 1.103.2 CLI/schema mismatch (`User.role`) | low (ALTER alias-колонка покрыла) | SQL UPDATE workaround. Upgrade deferred (см. known-issues.md) |
+| 18 | ~~Sprint 6 #1 partial: HTTP-ноды на `$env`~~ | ✅ RESOLVED 2026-05-17 night (`a54752a`) | `$vars.TELEGRAM_BOT_TOKEN` через `scripts/seed_n8n_vars.py` |
+| 19 | MIN_CONFIDENCE drift в `.env` (0.35 vs 0.25) | low (resolved в 2026-05-17 EOS) | дефолт 0.25 в docker-compose.yml фиксирует |
 
 ## Notes
 

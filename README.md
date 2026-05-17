@@ -15,20 +15,21 @@ HR/legal сотрудник получает ответ на корпорати�
 
 ## Качество ретривера (10 golden questions)
 
-| Метрика | Pre-S4 | Post-S4 | Post-S5 | Цель |
-|---|---|---|---|---|
-| Hit@1 | 0.22 | 0.44 | **0.67** | ≥0.60 ✓ |
-| Hit@5 | 0.33 | 0.67 | **0.89** | ≥0.55 ✓ |
-| MRR | 0.28 | 0.56 | **0.76** | ≥0.55 ✓ |
-| Refusal accuracy | 0.70 | 0.70 | **1.00** | ≥0.90 ✓ |
-| Avg confidence | 0.55 | 0.55 | **0.85** | — |
-| p50 latency | 4.2 s | 4.2 s | 5.1 s | <8 s ✓ |
-| Корпус (chunks) | 207 | 175 | 189 | — |
+| Метрика | Pre-S4 | Post-S4 | Post-S5 | **Final (S6, overlap=75)** | Цель |
+|---|---|---|---|---|---|
+| Hit@1 | 0.22 | 0.44 | 0.67 | **0.67** | ≥0.60 ✓ |
+| Hit@5 | 0.33 | 0.67 | 0.89 | **1.00** | ≥0.55 ✓ |
+| MRR | 0.28 | 0.56 | 0.76 | **0.78** | ≥0.55 ✓ |
+| Refusal accuracy | 0.70 | 0.70 | 1.00 | **1.00** | ≥0.90 ✓ |
+| Avg confidence | 0.55 | 0.55 | 0.85 | **0.80** | — |
+| p50 latency | 4.2 s | 4.2 s | 5.1 s | 5.1 s | <8 s ✓ |
+| Корпус (chunks) | 207 | 175 | 189 | **583** | — |
 
 Eval baseline — `eval/baseline.json`, исполнение — `python scripts/eval_retrieval.py`. CI regression gate — `pytest scripts/test_eval_regression.py` (floor: MRR ≥0.60, Hit@1 ≥0.50, refusal ≥0.85).
 
 - **Sprint 4 sweep** (`9017878`): убрана aviation-pollution из HR-шаблонов и не-safety политик, MRR +28pp.
-- **Sprint 5 content enrichment** (`?`): глоссарий controlled zone / AWB / MAWB / HAWB / ULD / GHA / cutoff / dangerous goods добавлен в `07_faq_expedition`, `05_tlog_regulation_waybill`, `01_hr_pol_safety`. Расширен MVP-44 → MVP-47 манифест. MRR +20pp, refusal accuracy +30pp.
+- **Sprint 5 content enrichment**: глоссарий controlled zone / AWB / MAWB / HAWB / ULD / GHA / cutoff / dangerous goods добавлен в `07_faq_expedition`, `05_tlog_regulation_waybill`, `01_hr_pol_safety`. Расширен MVP-44 → MVP-47 манифест. MRR +20pp, refusal accuracy +30pp.
+- **Sprint 6 finalisation** (overlap=75 + min_conf=0.25 + tiktoken cl100k_base splitter + `external_tk_rf_chapter_11.md`): chunks 189→583, Hit@5 +11pp; ADR-0004 фиксирует отклонение от ТЗ overlap=50 по эмпирике (eval/findings/2026-05-17-overlap-50-regression.md).
 
 Подробный разбор — `docs/findings/2026-05-17-sprint4-retrieval-polish.md`.
 
@@ -168,13 +169,16 @@ TestRag/
 Updated: 2026-05-17 (Sprint 6 #1/#6/#7 closed, overlap rolled back к ТЗ).
 
 ### Свежие изменения 2026-05-17
-- **chunk_overlap 75 → 50**: восстановлено соответствие букве ТЗ (`TokenTextSplitter(chunk_size=500, chunk_overlap=50)`). Интерим-надбавка 75 (для refusal_accuracy=1.0) откатана: текущее `MIN_CONFIDENCE=0.25` + добавление `external_tk_rf_chapter_11.md` дают запас по threshold.
-- **Sprint 6 #1 — extract whitelist/routing/help из n8n** (commit `2e74a17`): 118 строк JS из Whitelist Code → Python `tg_classifier.py` + `tg_copy.py`. Endpoints `POST /tg/classify`, `GET /tg/copy/{key}`. Whitelist node — теперь тонкий HttpRequest proxy. `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`. Закрывает Issue #14 (n8n coupling).
-- **Sprint 6 #6 — N2 Quick-actions** (commit `217b84f`): `POST /clarify` (rerun original Q с top_k=10), `GET /expand` (full chunk content). Format Answer +row 3 (🔁 Уточнить + 📖 Развернуть). n8n workflow +Clarify?/Expand? branches (28 → 32 узла).
-- **Sprint 6 #7 — Prev-N-QA infrastructure** (commit `50699fe`): `AskRequest.prev_qa_count` opt-in (0..5). Augmented retrieval query (current Q + previous N questions, filter refusal/low-conf), LLM prompt не augmented. `scripts/eval_multiturn.py` — A/B harness на 5 multi-turn cases. **Live A/B отложен** до подъёма Docker (см. `docs/known-issues.md` #16).
+- **chunk_overlap финал = 75** (commit `52ed0a5`, ADR-0004): eval replay при overlap=50 показал floor-violation (MRR 0.78→0.56). Rollback к 75 с обоснованием в `docs/adr/0004-chunk-overlap-75.md`. MIN_CONFIDENCE drift 0.35→0.25 (issue #19).
+- **Sprint 6 #1 — extract whitelist/routing/help из n8n** (commit `2e74a17`): 118 строк JS из Whitelist Code → Python `tg_classifier.py` + `tg_copy.py`. Endpoints `POST /tg/classify`, `GET /tg/copy/{key}`. Whitelist node — теперь тонкий HttpRequest proxy. Закрывает Issue #14 (n8n coupling).
+- **Sprint 6 #1 finish — `$vars.TELEGRAM_BOT_TOKEN`** (commit `a54752a`, closes issue #18): 4 TG HTTP-ноды переключены с `$env` на `$vars` (variable в `n8n.variables`, инсертится через `scripts/seed_n8n_vars.py`). `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` default восстановлен.
+- **Sprint 6 #6 — N2 Quick-actions** (commit `217b84f`): `POST /clarify` (rerun original Q с top_k=10), `GET /expand` (full chunk content). Format Answer +row 3 (🔁 Уточнить + 📖 Развернуть).
+- **📖 expand workflow fix** (commit `254d670`): Resolve Expand отдавал ExpandResponse без chat_id → Send Direct Reply TG 400. Insert Format Expand Code-узла (33 узла, было 32).
+- **`/expand` HTML escape** (commit `8d7adf2`): chunk.content шёл в f-string без `html.escape` → TG 400 "can't parse entities" на chunks с `<https://...>` (autolinks) и `M&A`/`P&L`. Latent bug, +regression тест.
+- **Sprint 6 #7 — Prev-N-QA infrastructure** (commit `50699fe`): `AskRequest.prev_qa_count` opt-in (0..5). Augmented retrieval query, LLM prompt не augmented. Live A/B: ΔHit@5=+0.20 (commit `52ed0a5`); default остаётся opt-in.
 
-pytest: **192/192** зелёные.
-Eval baseline (overlap=75 post-Fix#1): MRR=0.78 Hit@1=0.67 Hit@5=1.00 refusal_accuracy=1.00 avg_conf=0.80.
+pytest: **193/193** зелёные. Live TG E2E smoke: **6/6 ✓**.
+Eval baseline (overlap=75, min_conf=0.25): MRR=0.78 Hit@1=0.67 Hit@5=1.00 refusal_accuracy=1.00 avg_conf=0.80.
 
 - Добавлен RAG API на FastAPI.
 - Добавлен BM25 retriever и policy отказа при низкой уверенности.
