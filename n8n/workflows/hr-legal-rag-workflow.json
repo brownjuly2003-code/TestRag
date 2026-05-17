@@ -251,7 +251,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.RAG_API_URL }}/ask",
+        "url": "=http://rag-api:8000/ask",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ question: $node['Whitelist'].json.text, telegram_user_id: $node['Whitelist'].json.user_id, top_k: 5 }) }}",
@@ -269,7 +269,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.RAG_API_URL }}/feedback",
+        "url": "=http://rag-api:8000/feedback",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ request_log_id: $json.request_log_id, telegram_user_id: $json.user_id, rating: $json.rating, comment: 'telegram_inline_button', category: $json.category || null }) }}",
@@ -311,7 +311,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.RAG_API_URL }}/history?telegram_user_id={{ $node['Whitelist'].json.user_id }}&limit=5",
+        "url": "=http://rag-api:8000/history?telegram_user_id={{ $node['Whitelist'].json.user_id }}&limit=5",
         "options": {}
       },
       "id": "fetch-history",
@@ -339,7 +339,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.RAG_API_URL }}/docs/summary",
+        "url": "=http://rag-api:8000/docs/summary",
         "options": {}
       },
       "id": "fetch-docs",
@@ -576,7 +576,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.RAG_API_URL }}/followup?request_log_id={{ $node['Whitelist'].json.request_log_id }}&idx={{ $node['Whitelist'].json.followup_idx }}",
+        "url": "=http://rag-api:8000/followup?request_log_id={{ $node['Whitelist'].json.request_log_id }}&idx={{ $node['Whitelist'].json.followup_idx }}",
         "options": {}
       },
       "id": "resolve-followup",
@@ -615,7 +615,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.RAG_API_URL }}/ask",
+        "url": "=http://rag-api:8000/ask",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ question: $node['Resolve Follow-up'].json.question, telegram_user_id: $node['Whitelist'].json.user_id, top_k: 5 }) }}",

@@ -7,76 +7,93 @@
 ```text
 Продолжаем D:\TestRag.
 
-Состояние HEAD `50699fe` (2026-05-17, Sprint 6 #1/#6/#7 closed + overlap rollback к ТЗ).
+HEAD будет на свежем коммите EOS-сессии 2026-05-17 (eval-driven overlap correction + Sprint 6 #1 partial workaround + live TG E2E confirmed).
 
-Свежие коммиты:
-- `50699fe` feat(api): Sprint 6 #7 — Prev-N-QA retrieval augmentation (infrastructure)
-- `217b84f` feat(api+bot): Sprint 6 #6 — N2 Quick-actions «🔁 Уточнить» / «📖 Развернуть»
-- `2e74a17` feat(api): Sprint 6 #1 — extract whitelist/routing/help из n8n в rag-api
-- `f98400b` fix(chunking): rollback chunk_overlap 75→50 (ТЗ literal compliance)
-- `116b67f` feat(corpus): внешний нормативный источник + frontmatter parsing (Fix #1)
-
-Тесты: pytest 192/192 зелёные (`python -m pytest -p no:schemathesis`).
-Eval baseline: на overlap=75 — MRR=0.78 Hit@1=0.67 Hit@5=1.00 refusal=1.00.
-**Eval-replay при overlap=50 — отложен**, см. ниже «Что не закрыто».
+Базовые цифры:
+- pytest: 192/192 зелёные.
+- Eval baseline на overlap=75 + MIN_CONFIDENCE=0.25: MRR 0.78 / Hit@1 0.67 / Hit@5 1.00 / refusal 1.0 / avg_conf 0.80.
+- Live TG E2E (scripts/smoke_tg_e2e.py): 5/6 чеков ✓ (N1 follow-up, N2 🔁 clarify, N2 buttons present, N3 handover ack, N4 reply threading; единственный minor — 📖 expand timeout, race с clarify reply).
 
 Корпус: MVP-48 (+external_tk_rf_chapter_11.md), chunk_count=583, documents=52.
 
 Стек:
-- FastAPI hybrid retrieval (token splitter cl100k_base 500/50, BM25 + vector + section rerank + frontmatter-driven metadata, `/ask?debug=true`).
+- FastAPI hybrid retrieval (token splitter cl100k_base 500/75, BM25 + vector + section rerank + frontmatter-driven metadata, `/ask?debug=true`).
 - Mistral (singleton httpx).
-- n8n 32 узла (pin 1.103.2). Whitelist Code node теперь — тонкий HttpRequest proxy на /tg/classify. N8N_BLOCK_ENV_ACCESS_IN_NODE=true.
-- Telegram @AIagentJu_bot через cloudflared tunnel.
+- n8n 32 узла (pin 1.103.2, см. known-issues #17 про CLI workaround). Sprint 6 #1 ПОКА PARTIAL — HTTP nodes ещё читают $env (issue #18), N8N_BLOCK_ENV_ACCESS_IN_NODE=false override через .env.
+- Telegram @AIagentJu_bot через cloudflared tunnel (testrag-cloudflared, ephemeral trycloudflare).
 
-Что закрыто за session 2026-05-17:
-- ✅ chunk_overlap 75→50 (буква ТЗ).
-- ✅ Sprint 6 #1 (extract whitelist/routing/help): tg_classifier.py, tg_copy.py, /tg/classify, /tg/copy/{key}; N8N_BLOCK_ENV_ACCESS_IN_NODE=true; +32 unit-теста.
-- ✅ Sprint 6 #6 (N2 Quick-actions): /clarify (rerun top_k=10), /expand (full chunk); Format Answer +row 3 (🔁 / 📖); n8n workflow +Clarify?/Expand? branches; +14 тестов.
-- ✅ Sprint 6 #7 (Prev-N-QA infrastructure): multiturn.py + AskRequest.prev_qa_count opt-in (0..5), filter_relevant_prev_qas (skip refusal/low-conf); scripts/eval_multiturn.py (5 multi-turn cases, A/B harness); +15 тестов.
+Что закрыто 2026-05-17 EOS (full day):
+- ✅ Live eval replay overlap=50 → регрессия → rollback к overlap=75 (eval-driven, ADR-0004). MIN_CONFIDENCE override drift 0.35→0.25 (issue #19).
+- ✅ Prev-N-QA live A/B на финальном overlap=75 baseline: ΔHit@1=0 ΔHit@5=+0.20 ΔMRR=+0.05. Решение: opt-in (default=0).
+- ✅ n8n workflow import после Sprint 6 #1/#6 правок — через SQL UPDATE workaround (CLI 1.103.2 broken, issue #17). Workflow active=true, 32 nodes.
+- ✅ scripts/smoke_tg_e2e.py расширен под N2 🔁/📖, прогнан live, 5/6 ✓.
+- ✅ Schema fix: ALTER TABLE n8n."user" ADD COLUMN role GENERATED ALWAYS AS ("roleSlug") STORED.
+- ✅ docs/known-issues.md +#17/#18/#19, docs/adr/0004-chunk-overlap-75.md, docs/findings/2026-05-17-overlap-50-regression.md.
 
-Что НЕ закрыто (defer на сессию с поднятым Docker — см. docs/known-issues.md #16):
-- ⏸ Live eval replay при overlap=50 → обновить eval/baseline.json.
-- ⏸ Live Prev-N-QA A/B (Sprint 6 #7) → вписать ΔHit@1 в docs/findings/2026-05-17-prev-n-qa-ablation.md.
-- ⏸ Live TG smoke E2E с 🔁 Уточнить / 📖 Развернуть кнопками (scripts/smoke_tg_e2e.py пока проверяет только 📎/👍/👎/🧑‍💼).
-- ⏸ n8n workflow import после Sprint 6 #1/#6 правок: `MSYS_NO_PATHCONV=1 docker compose exec -T n8n n8n import:workflow --input=/workflows/hr-legal-rag-workflow.json --projectId=AAx39VT08WENfUYU` + activate через SQL + `docker compose restart n8n`.
+Что НЕ закрыто (на следующую сессию):
+- ⏸ Sprint 6 #1 finish (issue #18): refactor 4 TG HTTP nodes на `authentication: predefinedCredentialType, nodeCredentialType: 'telegramApi'` (НЕ через $credentials.X expression — не работает, попытка дала пустой токен → 404). После refactor вернуть `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` default.
+- ⏸ Sprint 6 #2 OpenAPI dump (если есть). #3-#5 closed (`881c5f2`, `470b692`, `b7812b9`).
+- ⏸ Investigate `📖 Развернуть expand` race в TG smoke (single failure из 6). Возможно scripts/smoke_tg_e2e.py не дожидается reply2.id refresh после clarify click.
+- ⏸ n8n upgrade за пределы 1.103.2 (issue #17) с regression-тестом workflow.
 
 Перед работой:
 - Не выводить .env, токены, ключи в чат.
-- Docker Desktop поднимается 5-10 минут на холодную (Win11+WSL2, см. docs/known-issues.md #16). Запускать pre-warm параллельно с unit-работой, не блокироваться ожиданием.
-- После изменений python-кода: `docker compose build rag-api && docker compose up -d --force-recreate rag-api` (issue 9).
-- После изменений n8n workflow: import + activate (см. выше).
+- Docker Desktop поднимается 5-10 минут на холодную (issue #16). Pre-warm параллельно с unit-работой.
+- После изменений n8n workflow: SQL UPDATE workaround (`.tmp/patch_workflow.py` + docker cp + `MSYS_NO_PATHCONV=1 docker exec ... psql -f //tmp/update_workflow.sql` + restart).
+- Cloudflared tunnel ephemeral: при рестарте `docker rm -f testrag-cloudflared` → новый run → update N8N_WEBHOOK_URL в .env → `docker compose up -d --force-recreate n8n` → `deleteWebhook + activate workflow` (n8n сам setWebhook с правильным secret).
 ```
 
-## Когда Docker поднимется — first thing to run
+## Когда нужно поднять окружение с нуля
 
-```powershell
-cd D:\TestRag
+```bash
+cd D:/TestRag
 
-# 0. Sanity: контейнеры up + healthcheck зелёные
+# 0. Sanity
 docker compose up -d
 docker ps --format "table {{.Names}}\t{{.Status}}"
-curl http://localhost:8000/health
+curl http://localhost:8000/health   # chunk_count=583 expected
 
-# 1. Eval replay при overlap=50 (закрывает task #9 from session 2026-05-17)
-docker compose up -d --force-recreate rag-api
-python scripts/eval_retrieval.py --output eval/baseline.json
-cat eval/baseline.json | python -c "import sys,json; r=json.load(sys.stdin); print(r['summary'])"
-# Если floor проходит (MRR≥0.60, Hit@1≥0.50, refusal≥0.85) — git commit eval/baseline.json.
-# Если просел — diff с .tmp/baseline_overlap75.json, решить: оставить 50 (ТЗ) или вернуть 75 с обоснованием.
+# 1. Cloudflared tunnel (ephemeral — нужно при каждом session start)
+docker rm -f testrag-cloudflared 2>/dev/null
+docker run -d --name testrag-cloudflared --network testrag_default cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://n8n:5678
+sleep 15
+TUNNEL=$(docker logs testrag-cloudflared 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -1)
+echo "tunnel: $TUNNEL"
 
-# 2. Prev-N-QA A/B (Sprint 6 #7 live)
-python scripts/eval_multiturn.py --output .tmp/eval_multiturn.json
-# Вписать ΔHit@1/ΔHit@5/ΔMRR в docs/findings/2026-05-17-prev-n-qa-ablation.md § «A/B harness».
+# 2. Update N8N_WEBHOOK_URL in .env
+python -c "
+import pathlib, re
+p = pathlib.Path('.env')
+text = p.read_text(encoding='utf-8')
+new = re.sub(r'^N8N_WEBHOOK_URL=.*$', f'N8N_WEBHOOK_URL=$TUNNEL/', text, flags=re.MULTILINE)
+p.write_text(new, encoding='utf-8')
+"
+docker compose up -d --force-recreate n8n
 
-# 3. n8n workflow import после Sprint 6 #1/#6 правок
-MSYS_NO_PATHCONV=1 docker compose exec -T n8n n8n import:workflow --input=/workflows/hr-legal-rag-workflow.json --projectId=AAx39VT08WENfUYU
-docker compose exec -T postgres psql -U testrag -d testrag -c "update n8n.workflow_entity set active=true where name='TestRag HR Legal Assistant';"
+# 3. Reset TG webhook + reactivate workflow (n8n auto-setWebhook with secret)
+python -c "
+import pathlib, re, urllib.request
+token = re.search(r'TELEGRAM_BOT_TOKEN=(\S+)', pathlib.Path('.env').read_text(encoding='utf-8')).group(1)
+urllib.request.urlopen(urllib.request.Request(f'https://api.telegram.org/bot{token}/deleteWebhook', data=b'')).read()
+print('webhook deleted')
+"
+docker compose exec -T postgres psql -U testrag -d testrag -c "UPDATE n8n.workflow_entity SET active=false WHERE id='testrag-hr-legal-assistant'; UPDATE n8n.workflow_entity SET active=true WHERE id='testrag-hr-legal-assistant';"
 docker compose restart n8n
+sleep 15
+# verify
+python -c "
+import pathlib, re, urllib.request, json
+token = re.search(r'TELEGRAM_BOT_TOKEN=(\S+)', pathlib.Path('.env').read_text(encoding='utf-8')).group(1)
+with urllib.request.urlopen(f'https://api.telegram.org/bot{token}/getWebhookInfo', timeout=20) as r:
+    info = json.loads(r.read())['result']
+print('host:', info.get('url','').split('/')[2])
+print('pending:', info.get('pending_update_count'))
+print('last_error:', info.get('last_error_message'))
+"
 
-# 4. Cloudflare tunnel — пересоздать если URL мёртвый (см. docs/demo-runbook.md)
-docker logs testrag-cloudflared --tail=5  # ищет 'Registered tunnel connection'
-
-# 5. TG E2E smoke — поправить scripts/smoke_tg_e2e.py для новых кнопок 🔁/📖
+# 4. Eval gates
+python scripts/eval_retrieval.py --output eval/baseline.json
+python scripts/eval_multiturn.py --output .tmp/eval_multiturn.json
 python scripts/smoke_tg_e2e.py
 ```
 
@@ -90,29 +107,30 @@ python -m pytest -p no:schemathesis  # 192 passed
 
 # OpenAPI contract gate (ловит schema drift):
 python -m pytest -p no:schemathesis rag-api/tests/test_openapi_contract.py  # 4 passed
-# При расхождении: python scripts/export_openapi.py → commit docs/openapi.yaml.
 ```
 
-## Стек контейнеров (после Sprint 6 #1)
+## Стек контейнеров
 
 | Контейнер | Image | Status check | Внешний порт | Прим. |
 |---|---|---|---|---|
-| `testrag-postgres-1` | `pgvector/pgvector:pg16` | pg_isready healthcheck | **expose only**, без publish | — |
-| `testrag-rag-api-1` | local build | urllib /health (timeout=3) | `8000:8000` | +ALLOWED_TELEGRAM_USER_IDS env |
-| `testrag-n8n-1` | `n8nio/n8n:1.103.2` (pinned) | n8n healthz | `5678:5678` | **N8N_BLOCK_ENV_ACCESS_IN_NODE=true** (Sprint 6 #1) |
-| `testrag-cloudflared` | cloudflare/cloudflared | runtime registration | none (outbound only) | — |
+| `testrag-postgres-1` | `pgvector/pgvector:pg16` | pg_isready healthcheck | **expose only** | + alias column `n8n.user.role` (workaround #17) |
+| `testrag-rag-api-1` | local build | urllib /health (timeout=3) | `8000:8000` | overlap=75, min_conf=0.25 |
+| `testrag-n8n-1` | `n8nio/n8n:1.103.2` (pinned) | n8n healthz | `5678:5678` | `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` через .env (issue #18) |
+| `testrag-cloudflared` | cloudflare/cloudflared | runtime registration | none (outbound only) | ephemeral, пересоздавать при рестарте |
 
-POSTGRES_PASSWORD и N8N_ENCRYPTION_KEY теперь `${VAR:?required}` — `docker compose up` упадёт если не указано в `.env`.
+POSTGRES_PASSWORD и N8N_ENCRYPTION_KEY — `${VAR:?required}`.
 
-## Где что лежит (актуализировано session 2026-05-17)
+## Где что лежит (актуализировано 2026-05-17 EOS)
 
-- **Корпус** — `corpus/*.md` (200 файлов + external_tk_rf_chapter_11.md, 7 категорий + федеральный закон). MVP — `manifests/MVP_CORPUS_FILES.txt` (48 файлов).
+- **Корпус** — `corpus/*.md` (200 файлов + external_tk_rf_chapter_11.md). MVP — `manifests/MVP_CORPUS_FILES.txt` (48 файлов).
 - **rag-api** — `rag-api/app/{main,rag,storage,llm,settings,tg_classifier,tg_copy,multiturn,prompts}.py`.
 - **Тесты** — `rag-api/tests/test_{api,rag,llm,n8n_workflow,openapi_contract,ingestion,tg_classifier,multiturn}.py` (192/192).
 - **n8n workflow** — `n8n/workflows/hr-legal-rag-workflow.json` (32 узла).
-- **Eval** — `scripts/eval_retrieval.py` (10 single-turn golden Qs), `scripts/eval_multiturn.py` (5 multi-turn cases A/B), `scripts/test_eval_regression.py` (pytest gate), `eval/baseline.json` (closed, overlap=75; replay при overlap=50 deferred).
+- **Eval** — `scripts/eval_retrieval.py` (10 single-turn golden Qs), `scripts/eval_multiturn.py` (5 multi-turn A/B), `scripts/test_eval_regression.py` (pytest gate), `eval/baseline.json` (overlap=75 + min_conf=0.25 closed).
+- **Smoke** — `scripts/smoke_tg_e2e.py` (N1/N2/N3/N4 buttons), `scripts/smoke_followup.py`.
 - **Cross-audit** — `kimi_audit_17_05_26.md` (Kimi полный аудит).
-- **Findings** — `docs/findings/2026-05-17-{sprint4-retrieval-polish,prev-n-qa-ablation}.md`.
-- **Known issues** — `docs/known-issues.md` (16 issues, #14 RESOLVED, #16 NEW Docker cold start).
-- **ADR** — `docs/adr/0001-orchestrator-n8n.md`, `0002-bm25-plus-pgvector-hybrid.md`, `0003-mistral-llm.md`.
-- **OpenAPI** — `docs/openapi.yaml/.json` (12 paths, 23 schemas; gate в test_openapi_contract.py).
+- **Findings** — `docs/findings/2026-05-17-{sprint4-retrieval-polish,prev-n-qa-ablation,overlap-50-regression}.md`.
+- **Known issues** — `docs/known-issues.md` (19 issues, #14/#16 RESOLVED/known, #17/#18/#19 NEW).
+- **ADR** — `docs/adr/0001-n8n-as-bot-orchestrator.md`, `0002-in-memory-bm25-hybrid-retriever.md`, `0003-mistral-as-llm-and-embeddings.md`, `0004-chunk-overlap-75.md`.
+- **OpenAPI** — `docs/openapi.yaml/.json` (12 paths, 23 schemas).
+- **Workflow patch scripts** — `.tmp/patch_workflow.py`, `.tmp/find_env_refs.py`, `.tmp/update_workflow.sql` (gitignored).

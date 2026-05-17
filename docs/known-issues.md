@@ -177,8 +177,11 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 | 14 n8n coupling | ✅ RESOLVED (Sprint 6 #1, commit `2e74a17`) | — |
 | 15 Windows postgres binding | нет (expose-only workaround) | нет (prod = firewall) |
 | 16 Docker Desktop cold start ≥10мин | нет | poll или принять и defer eval-replay |
+| 17 n8n 1.103.2 CLI import + schema mismatch | да (SQL UPDATE workaround) | да (upgrade n8n или migrate schema) |
+| 18 Sprint 6 #1 partial — HTTP nodes ещё на $env | да (BLOCK_ENV=false override) | да (workflow refactor на credentials) |
+| 19 MIN_CONFIDENCE override drift в .env | да (вернуть к 0.25) | да (.env validate gate) |
 
-Демо-готовность: 🟢 retrieval polished (MRR=0.76 на overlap=75 / MRR=0.78 на overlap=75 post-Fix#1), refusal=1.0, content gaps закрыты. Sprint 6 #1/#6/#7 закрыты в session 2026-05-17 (n8n extract, N2 Quick-actions, Prev-N-QA infrastructure). Ephemeral tunnel (issue 10) — единственный blocker для долгой демо-сессии. Production-readiness — Mistral paid tier (issue 7) + named cloudflare tunnel + HTTPS.
+Демо-готовность: 🟢 retrieval polished (MRR=0.78 на overlap=75 + MIN_CONFIDENCE=0.25), refusal=1.0, content gaps закрыты. Sprint 6 #1/#6/#7 закрыты в session 2026-05-17 (n8n extract, N2 Quick-actions, Prev-N-QA infrastructure). Live TG E2E подтверждён 2026-05-17 EOD (5/6 N1+N2+N3+N4). Ephemeral tunnel (issue 10) — единственный blocker для долгой демо-сессии. Production-readiness — Mistral paid tier (issue 7) + named cloudflare tunnel + HTTPS + Sprint 6 #1 finish (issue 18).
 
 ## 16. Docker Desktop cold start на Win11 + WSL2 = 5-10 минут
 
@@ -199,8 +202,61 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 **Когда есть Docker (любая будущая сессия)**:
 ```bash
 docker compose up -d --force-recreate rag-api
-python scripts/eval_retrieval.py --output eval/baseline.json   # overlap=50 replay
-python scripts/eval_multiturn.py --output .tmp/eval_multiturn.json   # Prev-N-QA A/B
-python scripts/smoke_tg_e2e.py   # full Telegram E2E включая 🔁/📖
+python scripts/eval_retrieval.py --output eval/baseline.json
+python scripts/eval_multiturn.py --output .tmp/eval_multiturn.json
+python scripts/smoke_tg_e2e.py   # требует cloudflared up + webhook re-registered
 ```
-Результаты вписать в `eval/baseline.json` + `docs/findings/2026-05-17-prev-n-qa-ablation.md` (§ A/B harness).
+
+## 17. n8n 1.103.2 CLI `import:workflow` + DB schema mismatch
+
+**Симптом**:
+```
+docker compose exec -T n8n n8n import:workflow --input=/workflows/hr-legal-rag-workflow.json
+→ An error occurred while importing workflows. See log messages for details.
+column User.role does not exist
+```
+Также runtime webhook execution падает с `column 9827...role does not exist` (alias на `n8n.user` в JOIN с `project_relation`).
+
+**Root cause**: n8n 1.103.2 (pinned image `n8nio/n8n:1.103.2`) использует typeorm-сгенерированный SQL с колонкой `role`, но реальная schema БД (из миграций) имеет `roleSlug` + FK на `n8n.role(slug)`. Schema "впереди" runtime — БД мигрирована на более новый layout, но pinned runtime не знает про переименование.
+
+**Status**: KNOWN, workaround применён.
+
+**Workaround**:
+1. **Schema alias-колонка**: `ALTER TABLE n8n."user" ADD COLUMN role text GENERATED ALWAYS AS ("roleSlug") STORED;` — даёт SELECT-compat для runtime запросов.
+2. **CLI замена**: вместо `n8n import:workflow` — прямой `UPDATE n8n.workflow_entity SET nodes=...::json, connections=...::json, ... WHERE id='<workflow-id>';` + `docker cp .tmp/update_workflow.sql testrag-postgres-1:/tmp/` + `MSYS_NO_PATHCONV=1 docker exec testrag-postgres-1 psql -U testrag -d testrag -f //tmp/update_workflow.sql` + `docker compose restart n8n`. Реализация: `.tmp/patch_workflow.py` (gitignored .tmp/).
+
+**Fix path**: upgrade pinned n8n до версии, где typeorm-маппинг матчится с migrate'нутой schema. Требует regression-теста workflow с актуальным image.
+
+## 18. Sprint 6 #1 partial — HTTP nodes ещё читают `$env`
+
+**Симптом**: При `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` (Sprint 6 #1) HTTP-ноды воркфлоу падают с `ExpressionError: access to env vars denied`. Затронуты `Send Typing`, `Send Typing Followup`, `Edit Reply Markup`, `Send Answer` (читают `$env.TELEGRAM_BOT_TOKEN`) + `Ask RAG API`, `Send Feedback`, `Fetch History`, `Fetch Docs`, `Resolve Follow-up`, `Ask RAG Followup` (читают `$env.RAG_API_URL`).
+
+**Root cause**: Sprint 6 #1 (commit `2e74a17`) удалил `$env` доступ из **Code nodes** (тонкие proxies на rag-api), и включил `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`. Но **HTTP nodes** ещё использовали `$env` в URL expressions — это не было замечено без live smoke. Tightening gate сломал TG-бот: webhook принимает update, классификация работает, но Send Typing/Ask RAG API падают на expression eval.
+
+**Status**: KNOWN, временно ослаблено через .env override.
+
+**Workaround** (применён):
+- `docker-compose.yml`: `N8N_BLOCK_ENV_ACCESS_IN_NODE: ${N8N_BLOCK_ENV_ACCESS_IN_NODE:-true}` (индирекция, дефолт `true` для prod-safety).
+- `.env`: `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` (только локально, gitignored).
+
+**Fix path**: refactor HTTP nodes на n8n credentials:
+- `Send Typing`/`Send Answer`/etc → `authentication: 'predefinedCredentialType', nodeCredentialType: 'telegramApi'` с inject auth через credential type handler. NB: попытка использовать `{{ $credentials.telegramApi.accessToken }}` в URL expression **не сработала** — n8n инжектит пустую строку (TG → 404 `chat not found`). Нужен `predefinedCredentialType` подход, не expression-substitution.
+- `Ask RAG API`/etc → URL hardcoded на `http://rag-api:8000` (внутри docker network, без credentials). Этот фикс уже применён в workflow, но pinned URL менее гибкий чем `$env.RAG_API_URL`. Альтернатива — read из .env при импорте workflow (templating).
+
+После полного refactor вернуть default `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` и закрыть Sprint 6 #1.
+
+## 19. MIN_CONFIDENCE override drift в `.env`
+
+**Симптом**: refusal_accuracy падает с 1.0 до 0.6-0.7 — модель отказывается отвечать (`refused=true`) на вопросы, которые должна закрывать (`expected_refused=false`). Confidence у этих ответов в диапазоне 0.18-0.32.
+
+**Root cause**: `MIN_CONFIDENCE` в `.env` стоял на 0.35, в `docker-compose.yml` дефолт 0.25. Override drift: после Fix #2 (token splitter cl100k_base) chunks стали меньше → confidence на тех же golden Q ниже на ~23pp. Threshold 0.25 (по `feedback-docker-cold-start-windows`) восстанавливает refusal=1.0. В какой-то сессии `.env` подняли до 0.35 (вероятно эксперимент), забыли вернуть.
+
+**Status**: FIXED (2026-05-17 EOD, .env возвращён к 0.25).
+
+**Workaround / prevention**:
+- Гейт: добавить `pytest scripts/test_eval_regression.py` floor по refusal_accuracy ≥ 0.85 — уже есть, но проверять локально перед коммитом.
+- Перед запуском eval сверить `docker compose exec -T rag-api python -c "from app.settings import get_settings; print(get_settings().min_confidence)"` против baseline overlap=75 ожидаемого значения (0.25).
+
+**Fix path**: добавить runtime sanity-log на старте rag-api: `logger.info("min_confidence=%s (baseline overlap=75 expects 0.25)", settings.min_confidence)` — чтобы дрифт был виден в logs сразу.
+
+Результаты любых live runs вписать в `eval/baseline.json` + `docs/findings/2026-05-17-prev-n-qa-ablation.md` (§ A/B harness) + bot reply screenshots в demo-runbook.

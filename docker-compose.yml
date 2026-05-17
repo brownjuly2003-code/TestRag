@@ -70,10 +70,12 @@ services:
       N8N_PROTOCOL: http
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_SECURE_COOKIE: "false"
-      # Sprint 6 #1: Whitelist Code node теперь — тонкий HttpRequest на /tg/classify,
-      # бизнес-логика в rag-api. Ни одна Code node больше не читает $env →
-      # closing Issue #14 codex-audit#3.
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+      # Sprint 6 #1 partial: Code nodes больше не читают $env (issue #14 closed
+      # для Code nodes), но HTTP nodes ещё читают $env.TELEGRAM_BOT_TOKEN/
+      # $env.RAG_API_URL. До завершения refactor (известная проблема, см.
+      # docs/known-issues.md #17), BLOCK_ENV отключён через env override —
+      # дефолт остаётся "true" чтобы prod-конфиг был secure-by-default.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: ${N8N_BLOCK_ENV_ACCESS_IN_NODE:-true}
       WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
       RAG_API_URL: ${RAG_API_URL:-http://rag-api:8000}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
