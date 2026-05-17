@@ -6,22 +6,36 @@
 
 ## Current Status
 
-Updated: 2026-05-17 EOS (HEAD после Sprint 3 + ТЗ-критика sweep).
+Updated: 2026-05-17 night (HEAD `74f45fd` — Sprint 5 closed).
 
-- [x] Docker Compose поднят: `postgres`, `rag-api`, `n8n`, `cloudflared`.
+- [x] Docker Compose поднят: `postgres` (expose-only, не публикуется), `rag-api` (с healthcheck), `n8n:1.103.2` (pinned), `cloudflared` (отдельный контейнер).
 - [x] n8n workflow активирован, публичный webhook через cloudflare tunnel (trycloudflare).
 - [x] Локальный Telegram whitelist для `432751211`.
-- [x] RAG API: `chunk_count=207`, `documents=48`, postgres/mistral/embeddings enabled.
+- [x] RAG API: `chunk_count=189`, `documents=51` (MVP-47), postgres/mistral/embeddings enabled.
 - [x] Postgres tables: documents (+version/effective_from/effective_to/status), document_chunks, request_logs (+latency_ms/llm_model/prompt_tokens/completion_tokens), answer_feedback (+category/free_text/chunk_ids), review_queue (+context jsonb).
-- [x] **pytest 101/101** (`python -m pytest -p no:schemathesis`).
-- [x] Workflow 28 узлов активный (Sprint 3 N1 +4 ветки: Followup? → Resolve Follow-up → Send Typing Followup → Ask RAG Followup).
-- [x] Aviation profile pass на 200 corpus-файлов. MVP-44 подборка ingested.
-- [x] Live TG E2E ✅ через `scripts/smoke_tg_e2e.py` (Telethon user account): N1 📎 click, N3 «🧑‍💼 → ACK», N4 reply_to=user_msg_id.
-- [x] Split до 4000 chars подтверждён через `.tmp/smoke_split.py`.
-- [x] ТЗ-критика 12 пунктов закрыта (см. `docs/research/2026-05-17-architecture-critique-tz.md`): 9 covered, 2 known-limitations (whitelist→SSO, external normative), 1 partial (structure-aware chunking).
-- [x] Eval baseline: hit@1=0.22, MRR=0.28, refusal_acc=0.70, avg_latency=5700ms (`scripts/eval_retrieval.py --output .tmp/eval_baseline.json`).
-- [x] /metrics endpoint: refusal_rate, avg_latency_ms, bad_feedback_rate за окно часов.
-- [x] Section-keyword rerank в HybridRetriever (+10% per query-term match в section name, capped at +30%).
+- [x] **pytest 112/112** (`python -m pytest -p no:schemathesis`).
+- [x] **Eval CI gate** активен: `pytest scripts/test_eval_regression.py` (floor MRR ≥0.60, Hit@1 ≥0.50, refusal ≥0.85).
+- [x] Workflow 28 узлов активный (Sprint 3 N1 +4 ветки).
+- [x] Aviation profile pass на 200 corpus-файлов; MVP-47 (+`07_faq_expedition/transport_road/claims_procedure`).
+- [x] Sprint 4: aviation pollution revert в HR-шаблонах + не-safety политики (76 файлов).
+- [x] Sprint 5 content enrichment: глоссарий controlled zone / AWB / MAWB / HAWB / ULD / GHA / cutoff / dangerous goods в `07_faq_expedition`, `05_tlog_regulation_waybill`, `01_hr_pol_safety`.
+- [x] BCG demo polish: 🟢/🟡/🟠 confidence chip, refusal next-steps suffix, sources без bare score, /docs sample_files (2 doc-titles на категорию), README hero metrics.
+- [x] LLM robustness guards: `_extract_choice_content`, JSONDecodeError catch, MistralEmbeddingClient._observed_dim warning при dim mismatch.
+- [x] HybridRetriever weights env-параметризованы: HYBRID_{BM25,VECTOR,COVERAGE_EXP,SECTION_BOOST_*}.
+- [x] Live TG E2E ✅ через `scripts/smoke_tg_e2e.py` (Telethon).
+
+## Eval (10 golden Qs)
+
+| Метрика | Pre-S4 | Post-S4 | **Post-S5** | Цель |
+|---|---|---|---|---|
+| Hit@1 | 0.22 | 0.44 | **0.67** | ≥0.60 ✓ |
+| Hit@5 | 0.33 | 0.67 | **0.89** | ≥0.55 ✓ |
+| MRR | 0.28 | 0.56 | **0.76** | ≥0.55 ✓✓ |
+| Refusal accuracy | 0.70 | 0.70 | **1.00** | ≥0.90 ✓✓ |
+| Avg confidence | 0.55 | 0.55 | **0.85** | — |
+| p50 latency | 4.2 s | 4.2 s | 5.1 s | <8 s ✓ |
+
+Baseline закоммичен — `eval/baseline.json` (НЕ `.tmp/`).
 
 ## Sprint 1 — must-have UX polish ✅ DONE (2026-05-17)
 
@@ -85,22 +99,54 @@ Known limitations (out of MVP scope, документированы):
 - **#6 Whitelist→SSO/RLS**: TG whitelist для MVP. Production требует SSO + Postgres RLS.
 - **#9 External normative**: corpus local, без live-обновления норм.
 
-## Sprint 4 — retrieval polish (NEXT)
+## Sprint 4 — retrieval polish ✅ DONE (2026-05-17, commit `9017878`)
 
-Цель: поднять Hit@1 ≥0.6, MRR ≥0.55 на golden Q (текущий baseline: 0.22 / 0.28).
+Цель достигнута: MRR 0.28→0.56, Hit@5 0.33→0.67.
 
-- [ ] **Retrieval polluted fix** (`docs/findings/2026-05-17-retrieval-aviation-pollution.md`): re-profile aviation pass только для tlog/safety/comp файлов. HR-шаблоны откатить к pre-aviation версии. 3-5 часов.
-- [ ] **Boost section weight** в HybridRetriever: текущий +10% per match → попробовать +20%, замерить через eval.
-- [ ] **Document type filter в /ask**: optional `document_type: str` параметр → ограничивает retrieval по metadata.document_type.
-- [ ] **Eval-driven gate**: добавить `pytest scripts/test_eval_regression.py` который читает `.tmp/eval_baseline.json` и упирается если MRR упал ниже baseline.
+- [x] **Aviation pollution revert** (`docs/findings/2026-05-17-sprint4-retrieval-polish.md`): `git checkout 8aa97b9 --` для 76 файлов (01_hr/02_hr_tmp/07_faq кроме aviation-FAQ; 01_hr_pol_safety оставлен).
+- [x] Удалён `test_aviation_profile_in_hr_probation` (кодифицировал bug-as-feature).
+- [x] Eval expected_file Q5: `01_hr_pol` → `01_hr_probation`.
 
-## Sprint 5 — production hardening (если потребуется)
+## BCG demo polish ✅ DONE (2026-05-17, commit `fe22106`)
 
-- [ ] **N2 Quick-actions**: «Уточнить» (top_k=10 rerun), «Развернуть» (full chunk content).
-- [ ] **Prev-N-QA в retrieval** (after Sprint 4 stability): ablation A/B на golden Q.
+- [x] Format Answer: 🟢/🟡/🟠 confidence chip перед ответом (≥0.7/0.4/0); refusal-aware «Что делать дальше» suffix.
+- [x] Sources без bare score; «Источники:» / «Ближайшие документы (вне ответа):» для refusal.
+- [x] Whitelist /start: hero + value-prop + 3 example questions.
+- [x] Whitelist /help: «Что я умею» / «Примеры» / «Команды».
+- [x] /docs/summary +sample_files (по 2 на категорию через DISTINCT+ROW_NUMBER).
+- [x] README hero block с retrieval-метриками pre/post.
+- [x] +6 pin тестов (confidence chip, refusal detection, no-score, /docs samples).
+
+## Sprint 5 — content enrichment + audit hardening ✅ DONE (2026-05-17 night, commit `74f45fd`)
+
+Цель: закрыть P0/P1 из Kimi + Codex cross-audit (`.tmp/{kimi,codex}-audit.md`). MRR 0.56→0.76, refusal 0.70→1.00.
+
+- [x] **#1 Content enrichment** (P0): глоссарий controlled zone / AWB / MAWB / HAWB / ULD / GHA / cutoff / dangerous goods в `07_faq_expedition` + `05_tlog_regulation_waybill` + `01_hr_pol_safety`. MVP-44 → MVP-47.
+- [x] **#2 Eval CI regression gate** (P0): `scripts/test_eval_regression.py` (7 pytest gate'ов с floor'ами); `eval/baseline.json` (НЕ .tmp/) закоммичен; eval_retrieval.py `expected_files` (список).
+- [x] **#3 Compose hardening** (P1): n8n:1.103.2 (pin), `${POSTGRES_PASSWORD:?required}` / `${N8N_ENCRYPTION_KEY:?required}` fail-fast, rag-api healthcheck, n8n `depends_on rag-api: service_healthy`, postgres expose-only (без publish).
+- [x] **#4 LLM robustness** (P1, codex-audit#2.3/7.3/6.2): `_extract_choice_content` guard, JSONDecodeError catch в `_loads_json_object`, `MistralEmbeddingClient._observed_dim` pin + warning при mismatch, ValueError catch на response.json(), structured logger.warning.
+- [x] **#5 Hybrid weights env-параметризация** (P1): `HYBRID_BM25_WEIGHT/VECTOR_WEIGHT/COVERAGE_EXP/SECTION_BOOST_PER_TERM/SECTION_BOOST_MAX` через env (defaults = Sprint 5 baseline).
+
+## Sprint 6 — extract + observability (NEXT, не делаю в этой сессии)
+
+Backlog из Kimi+Codex consensus, требует архитектурного шага.
+
+- [ ] **Extract business logic из n8n в rag-api**: whitelist check, command routing, /help/start/clear copy → FastAPI endpoints `/auth/check`, `/commands`. После — `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`. ~1 день.
+- [ ] **OpenAPI export**: `/openapi.json` → `docs/openapi.yaml` в repo + ADR (n8n choice, BM25 in-memory, Mistral). ~4 часа.
+- [ ] **Retrieval explainability** (codex-audit#6.3): debug fields в `/ask` response (coverage, section_boost) под флагом `?debug=1`. ~2 часа.
+- [ ] **Empty/stop-word query fallback** (codex-audit MISSED 1.2): на `query_tokens=[]` пробовать vector-only вместо `[]` сразу. ~1 час.
+- [ ] **HTTP client pooling** (codex-audit MISSED 8.3): `httpx.AsyncClient` singleton на runtime startup, lifespan event для close. ~2 часа.
+- [ ] **N2 Quick-actions**: «Уточнить» (top_k=10 rerun), «Развернуть» (full chunk content). ~3 часа.
+- [ ] **Prev-N-QA в retrieval**: ablation A/B на golden Q. ~3 часа.
+
+## Sprint 7+ — production hardening (если потребуется)
+
 - [ ] **Structure-aware chunking**: split по markdown `##`/`###` headers вместо фиксированных 500 токенов.
-- [ ] **SSO + RLS**: per-user role + Supabase-style row level security на document_chunks.
-- [ ] **External normative ingestion**: один lawsource live-обновляемый (КонсультантПлюс API, например).
+- [ ] **Cross-encoder reranker** (BGE-Reranker-v2-m3) на top-20 → top-5.
+- [ ] **SSO + RLS**: per-user role + Postgres RLS на document_chunks.
+- [ ] **External normative ingestion**: один lawsource live-обновляемый (КонсультантПлюс API).
+- [ ] **Langfuse** observability: трассировка LLM-вызовов, стоимость, drift detection.
+- [ ] **RAGAS** auto-eval: faithfulness, answer_relevancy, context_precision на golden set.
 
 ## Anti-patterns (явно НЕ делаем)
 
@@ -127,7 +173,8 @@ Known limitations (out of MVP scope, документированы):
 - [x] N4 reply-threading (Sprint 3).
 - [x] Eval pipeline + observability (response#1, observability#12).
 - [x] Versioning metadata + section rerank (#3, #5).
-- [ ] Retrieval polish: top-source соответствует домену вопроса (Sprint 4) — текущий MRR=0.28.
+- [x] Retrieval polish: MRR=0.76, Hit@1=0.67, refusal_accuracy=1.00 на golden set (Sprint 4+5).
+- [x] Eval CI regression gate (`pytest scripts/test_eval_regression.py`) предотвращает регрессию retrieval.
 - [ ] MVP можно показать без покупки n8n Cloud по `docs/demo-runbook.md` (зависит от cloudflare named tunnel или paid n8n).
 
 ## Known Issues
@@ -136,10 +183,12 @@ Known limitations (out of MVP scope, документированы):
 
 | # | issue | severity | fix |
 |---|---|---|---|
-| 1 | Retrieval polluted после aviation pass | high (prod) / low (demo) | Sprint 4 |
+| 1 | ~~Retrieval polluted после aviation pass~~ | RESOLVED Sprint 4 | commit `9017878` |
 | 2 | TG webhook secret in-memory | low (только тестирование) | n/a (n8n upstream) |
 | 7 | Mistral free tier 429 | medium (prod) | paid tier для prod |
 | 10 | Cloudflare tunnel эфемерные URLs | medium (demo) | named tunnel или real domain |
+| 14 | n8n coupling (whitelist/copy в JS nodes) | medium (Kimi+Codex audit) | Sprint 6 extract |
+| 15 | Postgres 127.0.0.1 binding blocked on Windows Docker | low (Hyper-V dynamic port reservation) | expose-only, firewall в prod |
 
 ## Notes
 

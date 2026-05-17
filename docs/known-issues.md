@@ -1,21 +1,16 @@
 # Known Issues & Workarounds
 
-Все известные проблемы TestRag MVP по состоянию на 2026-05-17 (HEAD `909bd42`). Каждая запись: симптом → root cause → текущий status → workaround/fix path.
+Все известные проблемы TestRag MVP по состоянию на 2026-05-17 night (HEAD `74f45fd`). Каждая запись: симптом → root cause → текущий status → workaround/fix path.
 
-## 1. Retrieval polluted после aviation pass
+## 1. ~~Retrieval polluted после aviation pass~~ ✅ RESOLVED Sprint 4
 
-**Симптом**: `Что такое controlled zone?` даёт top-5 sources из `02_hr_tmp_*` (трудовой договор, удалёнка, приказ об отпуске) score 0.84-0.94. Ожидалось `01_hr_pol_safety.md` (раньше выдавал score 0.97).
+**Симптом** (был): `Что такое controlled zone?` даёт top-5 sources из `02_hr_tmp_*` (трудовой договор, удалёнка, приказ об отпуске) вместо `01_hr_pol_safety.md`.
 
-**Root cause**: Aviation profile pass (commit `7c6951a`, 2026-05-16) переписал ВСЕ 200 corpus-файлов под авиагрузовую тематику, включая HR-шаблоны. Шаблоны трудового договора теперь содержат `controlled_zone_access`, `AWB`, `aviation security` ровно как safety policy. SQL подтверждение: `select d.file_name, count(*) from document_chunks c join documents d on c.document_id=d.id where c.content ilike '%controlled%zone%' group by 1 order by 2 desc` → 02_hr_tmp_employment_contract (5) > 02_hr_tmp_add_agreement (4) > 01_hr_pol_safety (1 реально релевантный).
+**Root cause**: Aviation profile pass (commit `7c6951a`, 2026-05-16) переписал ВСЕ 200 corpus-файлов под авиагрузовую тематику, включая HR-шаблоны. Aviation токены распределились равномерно по корпусу, забили top-K HR-шаблонами.
 
-**Status**: KNOWN, defer to Sprint 4.
+**Resolved** в commit `9017878` (Sprint 4): `git checkout 8aa97b9 --` для 76 файлов (01_hr_pol_* кроме safety, 02_hr_tmp_* все, 07_faq_* кроме aviation-FAQ). Удалён `test_aviation_profile_in_hr_probation`. Eval: MRR 0.28→0.56. Подробно — `docs/findings/2026-05-17-sprint4-retrieval-polish.md`.
 
-**Workaround**: Mistral собирает корректный ответ из «не тех» source — пользователь видит правильное описание controlled zone, но «Источники:» снизу выглядят нерелевантно. Для демо-аудитории неочевидно.
-
-**Fix candidates** (см. `docs/findings/2026-05-17-retrieval-aviation-pollution.md`):
-- Re-profile aviation pass только tlog/safety/comp, HR-шаблоны вернуть к pre-aviation (3-5 часов работы)
-- Boost section weight в HybridRetriever
-- Cross-encoder reranker на top-20
+Дополнительно Sprint 5 (`74f45fd`) расширил MVP-44 → MVP-47 (+aviation FAQ) и добавил глоссарий controlled zone / AWB / ULD / GHA / cutoff / DG в три ключевых файла. Финал: MRR 0.76, Hit@1 0.67, refusal accuracy 1.00.
 
 ## 2. TG webhook secret in-memory — синтетический POST невозможен
 
@@ -142,11 +137,31 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 
 **Status**: INTERMITTENT, не воспроизводится стабильно. Если повторится — добавить timing в логах rag-api.
 
+## 14. n8n coupling — бизнес-логика в JS Code nodes
+
+**Симптом**: Whitelist check, command routing (/help, /docs, /history, /start), greeting/help copy и Format Answer (MD→HTML, split, confidence chip, refusal handling) — всё в JS Code nodes внутри `n8n/workflows/hr-legal-rag-workflow.json`. Изменение копи приветствия = re-import workflow + restart n8n.
+
+**Root cause**: MVP-ускорение — собрали быстро через n8n UI. Architecturally n8n должен быть pure transport orchestrator (TG → routing API → sendMessage), а не business engine.
+
+**Status**: KNOWN, Sprint 6 backlog (Kimi+Codex audit P1 #3). Workaround на Sprint 5 — добавлены pin тесты на JS nodes (`test_format_answer_*` в `test_n8n_workflow.py`) чтобы регрессии ловились в pytest.
+
+**Fix path**: вынести whitelist check, command routing, copy в FastAPI endpoints `/auth/check`, `/commands`, `/start`, `/help`. После этого `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`. Effort: ~1 день.
+
+## 15. Postgres 127.0.0.1 binding blocked на Windows Docker
+
+**Симптом**: `docker compose up` падает на `bind: An attempt was made to access a socket in a way forbidden by its access permissions` при попытке `ports: ["127.0.0.1:5432:5432"]` ИЛИ `"5432:5432"`.
+
+**Root cause**: Hyper-V dynamic port reservation на Windows. Порты в диапазоне 1024-60000 могут быть динамически зарезервированы Hyper-V и не показываются через `netsh int ipv4 show excludedportrange protocol=tcp`.
+
+**Status**: WORKAROUND применён в Sprint 5 (`74f45fd`): postgres переведён в `expose: ["5432"]` (без `ports:` publish). Внешний доступ только через `docker compose exec postgres psql`. Это попутно закрывает codex-audit#3 (DB не должна быть exposed на хост).
+
+**Fix path для prod**: postgres всегда expose-only, доступ извне — через bastion / firewall / reverse proxy. На dev-машине Windows — текущее состояние OK.
+
 ## Сводка: что блокирует «production-ready»
 
 | issue | блокирует demo? | блокирует prod? |
 |---|---|---|
-| 1 retrieval polluted | нет (Mistral компенсирует) | да |
+| 1 retrieval polluted | RESOLVED Sprint 4 | RESOLVED |
 | 2 webhook secret in-memory | нет (юзер тестит вручную) | нет |
 | 3 MD→HTML | FIXED | FIXED |
 | 4 $json shadowing | FIXED | FIXED |
@@ -159,5 +174,7 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 | 11 N/A | — | — |
 | 12 n8n login | нет | нет (используем CLI/SQL) |
 | 13 intermittent latency | нет | мониторить |
+| 14 n8n coupling | нет | да (Sprint 6 extract) |
+| 15 Windows postgres binding | нет (expose-only workaround) | нет (prod = firewall) |
 
-Демо-готовность: ⚠️ retrieval polluted source list (issue 1) + ephemeral tunnel (issue 10) — главные нерешённые. Sprint 4 (retrieval polish) — приоритет.
+Демо-готовность: 🟢 retrieval polished (MRR=0.76), refusal=1.0, content gaps закрыты. Ephemeral tunnel (issue 10) — единственный blocker для долгой демо-сессии. Production-readiness — Sprint 6 (extract from n8n + Mistral paid tier).
