@@ -1,0 +1,762 @@
+openapi: 3.1.0
+info:
+  title: TestRag RAG API
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      summary: Health
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Health Health Get
+  /ask:
+    post:
+      summary: Ask
+      operationId: ask_ask_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AskResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /feedback:
+    post:
+      summary: Feedback
+      operationId: feedback_feedback_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Feedback Feedback Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /history:
+    get:
+      summary: History
+      operationId: history_history_get
+      parameters:
+      - name: telegram_user_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Telegram User Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 5
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /followup:
+    get:
+      summary: Followup
+      operationId: followup_followup_get
+      parameters:
+      - name: request_log_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Request Log Id
+      - name: idx
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Idx
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowupResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /metrics:
+    get:
+      summary: Metrics
+      operationId: metrics_metrics_get
+      parameters:
+      - name: window_hours
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 168
+          title: Window Hours
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /docs/summary:
+    get:
+      summary: Docs Summary
+      operationId: docs_summary_docs_summary_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorpusSummaryResponse'
+  /document/type-detection:
+    post:
+      summary: Document Type Detection
+      operationId: document_type_detection_document_type_detection_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentTypeRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentTypeResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    AskRequest:
+      properties:
+        question:
+          type: string
+          minLength: 1
+          title: Question
+        telegram_user_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Telegram User Id
+        top_k:
+          type: integer
+          maximum: 10.0
+          minimum: 1.0
+          title: Top K
+          default: 5
+        debug:
+          type: boolean
+          title: Debug
+          default: false
+      type: object
+      required:
+      - question
+      title: AskRequest
+    AskResponse:
+      properties:
+        request_log_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Request Log Id
+        answer:
+          type: string
+          title: Answer
+        confidence:
+          type: number
+          title: Confidence
+        refused:
+          type: boolean
+          title: Refused
+        request_type:
+          type: string
+          title: Request Type
+        sources:
+          items:
+            $ref: '#/components/schemas/Source'
+          type: array
+          title: Sources
+        status:
+          type: string
+          title: Status
+        effective_date_max:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Effective Date Max
+        latency_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Latency Ms
+        debug:
+          anyOf:
+          - $ref: '#/components/schemas/RetrievalDebug'
+          - type: 'null'
+      type: object
+      required:
+      - answer
+      - confidence
+      - refused
+      - request_type
+      - sources
+      - status
+      title: AskResponse
+    CorpusCategory:
+      properties:
+        category:
+          type: string
+          title: Category
+        label:
+          type: string
+          title: Label
+        doc_count:
+          type: integer
+          title: Doc Count
+        sample_files:
+          items:
+            type: string
+          type: array
+          title: Sample Files
+          default: []
+      type: object
+      required:
+      - category
+      - label
+      - doc_count
+      title: CorpusCategory
+    CorpusSummaryResponse:
+      properties:
+        categories:
+          items:
+            $ref: '#/components/schemas/CorpusCategory'
+          type: array
+          title: Categories
+        total_docs:
+          type: integer
+          title: Total Docs
+      type: object
+      required:
+      - categories
+      - total_docs
+      title: CorpusSummaryResponse
+    DocumentSource:
+      properties:
+        file:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File
+        section:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Section
+        date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Date
+        quote_or_summary:
+          type: string
+          title: Quote Or Summary
+      type: object
+      required:
+      - quote_or_summary
+      title: DocumentSource
+    DocumentTypeRequest:
+      properties:
+        question:
+          type: string
+          minLength: 1
+          title: Question
+        user_provided_fields:
+          additionalProperties: true
+          type: object
+          title: User Provided Fields
+        available_templates:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Available Templates
+        top_k:
+          type: integer
+          maximum: 10.0
+          minimum: 1.0
+          title: Top K
+          default: 5
+      type: object
+      required:
+      - question
+      title: DocumentTypeRequest
+    DocumentTypeResponse:
+      properties:
+        intent:
+          type: string
+          title: Intent
+        document_type:
+          type: string
+          title: Document Type
+        document_type_label:
+          type: string
+          title: Document Type Label
+        confidence:
+          type: string
+          title: Confidence
+        can_generate_draft:
+          type: boolean
+          title: Can Generate Draft
+        requires_human_review:
+          type: boolean
+          title: Requires Human Review
+        reasoning:
+          type: string
+          title: Reasoning
+        required_fields:
+          items:
+            $ref: '#/components/schemas/RequiredField'
+          type: array
+          title: Required Fields
+        missing_fields:
+          items:
+            type: string
+          type: array
+          title: Missing Fields
+        risk_flags:
+          items:
+            type: string
+          type: array
+          title: Risk Flags
+        source_requirements:
+          items:
+            type: string
+          type: array
+          title: Source Requirements
+        draft_outline:
+          items:
+            type: string
+          type: array
+          title: Draft Outline
+        draft_text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Draft Text
+        sources:
+          items:
+            $ref: '#/components/schemas/DocumentSource'
+          type: array
+          title: Sources
+        user_message:
+          type: string
+          title: User Message
+      type: object
+      required:
+      - intent
+      - document_type
+      - document_type_label
+      - confidence
+      - can_generate_draft
+      - requires_human_review
+      - reasoning
+      - required_fields
+      - missing_fields
+      - risk_flags
+      - source_requirements
+      - draft_outline
+      - draft_text
+      - sources
+      - user_message
+      title: DocumentTypeResponse
+    FeedbackRequest:
+      properties:
+        request_log_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Request Log Id
+        telegram_user_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Telegram User Id
+        rating:
+          type: string
+          title: Rating
+        comment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Comment
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        free_text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Free Text
+      type: object
+      required:
+      - rating
+      title: FeedbackRequest
+    FollowupResponse:
+      properties:
+        question:
+          type: string
+          title: Question
+        source:
+          $ref: '#/components/schemas/FollowupSource'
+      type: object
+      required:
+      - question
+      - source
+      title: FollowupResponse
+    FollowupSource:
+      properties:
+        chunk_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chunk Id
+        file:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File
+        section:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Section
+        score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Score
+      type: object
+      title: FollowupSource
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HistoryItem:
+      properties:
+        id:
+          type: string
+          title: Id
+        question:
+          type: string
+          title: Question
+        answer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Answer
+        confidence:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Confidence
+        refused:
+          type: boolean
+          title: Refused
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - id
+      - question
+      - refused
+      title: HistoryItem
+    HistoryResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/HistoryItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: HistoryResponse
+    MetricsResponse:
+      properties:
+        window_hours:
+          type: integer
+          title: Window Hours
+        total_requests:
+          type: integer
+          title: Total Requests
+        refusal_rate:
+          type: number
+          title: Refusal Rate
+        avg_latency_ms:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Avg Latency Ms
+        avg_confidence:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Avg Confidence
+        avg_prompt_tokens:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Avg Prompt Tokens
+        avg_completion_tokens:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Avg Completion Tokens
+        bad_feedback_rate:
+          type: number
+          title: Bad Feedback Rate
+      type: object
+      required:
+      - window_hours
+      - total_requests
+      - refusal_rate
+      - bad_feedback_rate
+      title: MetricsResponse
+    RequiredField:
+      properties:
+        name:
+          type: string
+          title: Name
+        label:
+          type: string
+          title: Label
+        required:
+          type: boolean
+          title: Required
+        value:
+          title: Value
+        source:
+          type: string
+          title: Source
+      type: object
+      required:
+      - name
+      - label
+      - required
+      - source
+      title: RequiredField
+    RetrievalDebug:
+      properties:
+        query_tokens:
+          items:
+            type: string
+          type: array
+          title: Query Tokens
+        weights:
+          additionalProperties:
+            type: number
+          type: object
+          title: Weights
+        has_vector:
+          type: boolean
+          title: Has Vector
+        results:
+          items:
+            $ref: '#/components/schemas/RetrievalDebugRow'
+          type: array
+          title: Results
+      type: object
+      required:
+      - query_tokens
+      - weights
+      - has_vector
+      - results
+      title: RetrievalDebug
+    RetrievalDebugRow:
+      properties:
+        chunk_id:
+          type: string
+          title: Chunk Id
+        file:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File
+        section:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Section
+        bm25_score:
+          type: number
+          title: Bm25 Score
+        normalized_bm25:
+          type: number
+          title: Normalized Bm25
+        vector_score:
+          type: number
+          title: Vector Score
+        coverage:
+          type: number
+          title: Coverage
+        section_boost:
+          type: number
+          title: Section Boost
+        final_score:
+          type: number
+          title: Final Score
+      type: object
+      required:
+      - chunk_id
+      - bm25_score
+      - normalized_bm25
+      - vector_score
+      - coverage
+      - section_boost
+      - final_score
+      title: RetrievalDebugRow
+    Source:
+      properties:
+        chunk_id:
+          type: string
+          title: Chunk Id
+        file:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File
+        section:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Section
+        date:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Date
+        source_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Url
+        score:
+          type: number
+          title: Score
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        effective_from:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Effective From
+        effective_to:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Effective To
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      type: object
+      required:
+      - chunk_id
+      - score
+      title: Source
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
