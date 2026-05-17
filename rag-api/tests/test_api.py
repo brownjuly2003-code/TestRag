@@ -372,6 +372,60 @@ def test_ask_response_includes_status_latency_and_version_metadata(monkeypatch):
     assert logged["latency_ms"] is not None
 
 
+def test_ask_response_omits_debug_by_default(monkeypatch):
+    """Sprint 6 #3: debug=null когда не запрошен (backwards-compat)."""
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/ask",
+            json={"question": "Сделай приказ о приеме на работу", "telegram_user_id": "42"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["debug"] is None
+
+
+def test_ask_response_includes_debug_breakdown_when_requested(monkeypatch):
+    """Sprint 6 #3: debug=true → веса, query_tokens, per-result decomposition."""
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/ask",
+            json={
+                "question": "Сделай приказ о приеме на работу",
+                "telegram_user_id": "42",
+                "debug": True,
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    debug = body["debug"]
+    assert debug is not None
+    assert "bm25" in debug["weights"]
+    assert "vector" in debug["weights"]
+    assert "coverage_exp" in debug["weights"]
+    assert isinstance(debug["query_tokens"], list)
+    assert isinstance(debug["has_vector"], bool)
+    assert isinstance(debug["results"], list)
+    if debug["results"]:
+        row = debug["results"][0]
+        for field in (
+            "chunk_id",
+            "bm25_score",
+            "normalized_bm25",
+            "vector_score",
+            "coverage",
+            "section_boost",
+            "final_score",
+        ):
+            assert field in row
+
+
 def test_ask_refused_response_status_is_unanswerable(monkeypatch):
     """При refused=True endpoint должен вернуть status='unanswerable' и не вызывать LLM."""
     store = FakeStore()

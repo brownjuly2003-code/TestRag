@@ -18,6 +18,7 @@ from .rag import (
     HybridRetriever,
     build_grounded_answer,
     confidence_from_results,
+    tokenize,
 )
 from .settings import get_settings
 from .storage import PostgresStore
@@ -40,6 +41,7 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1)
     telegram_user_id: str | None = None
     top_k: int = Field(default=5, ge=1, le=10)
+    debug: bool = False
 
 
 class Source(BaseModel):
@@ -55,6 +57,25 @@ class Source(BaseModel):
     status: str | None = None
 
 
+class RetrievalDebugRow(BaseModel):
+    chunk_id: str
+    file: str | None = None
+    section: str | None = None
+    bm25_score: float
+    normalized_bm25: float
+    vector_score: float
+    coverage: float
+    section_boost: float
+    final_score: float
+
+
+class RetrievalDebug(BaseModel):
+    query_tokens: list[str]
+    weights: dict[str, float]
+    has_vector: bool
+    results: list[RetrievalDebugRow]
+
+
 class AskResponse(BaseModel):
     request_log_id: str | None = None
     answer: str
@@ -66,6 +87,8 @@ class AskResponse(BaseModel):
     status: str  # answerable | unanswerable | needs_human_review
     effective_date_max: str | None = None
     latency_ms: int | None = None
+    # Sprint 6 #3 (codex-audit#6.3): retrieval explainability (opt-in via debug=true).
+    debug: RetrievalDebug | None = None
 
 
 class FeedbackRequest(BaseModel):
@@ -597,6 +620,46 @@ def is_pure_refusal(mistral_answer: str, min_body_chars: int = 120) -> bool:
     return len(body) < min_body_chars
 
 
+def build_retrieval_debug(
+    question: str,
+    results: list[Any],
+    query_embedding: list[float] | None,
+) -> RetrievalDebug:
+    """Sprint 6 #3 (codex-audit#6.3): retrieval breakdown для отладки/демо.
+
+    Возвращает per-chunk decomposition (bm25/vector/coverage/section_boost) + текущие
+    веса HybridRetriever + список query_tokens (показывает что отфильтровал tokenizer).
+    """
+    has_vector = query_embedding is not None and any(
+        getattr(r.chunk, "embedding", None) for r in results
+    )
+    return RetrievalDebug(
+        query_tokens=tokenize(question),
+        weights={
+            "bm25": HybridRetriever.BM25_WEIGHT,
+            "vector": HybridRetriever.VECTOR_WEIGHT,
+            "coverage_exp": HybridRetriever.COVERAGE_EXP,
+            "section_boost_per_term": HybridRetriever.SECTION_BOOST_PER_TERM,
+            "section_boost_max": HybridRetriever.SECTION_BOOST_MAX,
+        },
+        has_vector=has_vector,
+        results=[
+            RetrievalDebugRow(
+                chunk_id=r.chunk.chunk_id,
+                file=(r.chunk.metadata or {}).get("file"),
+                section=(r.chunk.metadata or {}).get("section"),
+                bm25_score=round(r.bm25_score, 4),
+                normalized_bm25=round(r.normalized_bm25, 4),
+                vector_score=round(r.vector_score, 4),
+                coverage=round(r.coverage, 4),
+                section_boost=round(r.section_boost, 4),
+                final_score=round(r.final_score, 4),
+            )
+            for r in results
+        ],
+    )
+
+
 def to_sources(results: list[Any]) -> list[Source]:
     sources = []
     for result in results:
@@ -709,6 +772,7 @@ async def ask(request: AskRequest) -> AskResponse:
         prompt_tokens=usage.get("prompt_tokens"),
         completion_tokens=usage.get("completion_tokens"),
     )
+    debug = build_retrieval_debug(request.question, results, query_embedding) if request.debug else None
     return AskResponse(
         request_log_id=request_log_id,
         answer=answer,
@@ -719,6 +783,7 @@ async def ask(request: AskRequest) -> AskResponse:
         status=status,
         effective_date_max=latest_effective_date(sources),
         latency_ms=latency_ms,
+        debug=debug,
     )
 
 

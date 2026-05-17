@@ -97,6 +97,11 @@ class SearchResult:
     bm25_score: float
     vector_score: float
     final_score: float
+    # Sprint 6 #3: explainability breakdown (codex-audit#6.3).
+    # Defaults сохраняют backwards-compat для построителей SearchResult вне HybridRetriever.
+    normalized_bm25: float = 0.0
+    coverage: float = 0.0
+    section_boost: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -198,6 +203,9 @@ class HybridRetriever:
                     bm25_score=bm25_score,
                     vector_score=vector_score,
                     final_score=final_score,
+                    normalized_bm25=normalized_bm25,
+                    coverage=coverage,
+                    section_boost=section_boost,
                 )
             )
 

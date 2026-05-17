@@ -25,7 +25,7 @@
 Sprint 6 backlog (если хочется продолжать):
 1. **Extract business logic из n8n** в FastAPI endpoints (whitelist, command routing, /help copy). После — N8N_BLOCK_ENV_ACCESS=true. ~1 день.
 2. **OpenAPI export** в docs/openapi.yaml + ADR. ~4 часа.
-3. **Retrieval explainability** debug-поля в /ask (coverage, section_boost). ~2 часа.
+3. ~~**Retrieval explainability** debug-поля в /ask (coverage, section_boost)~~ ✅ DONE (`AskRequest.debug=true` → `AskResponse.debug{query_tokens, weights, has_vector, results[]}`).
 4. ~~**Empty-query fallback** на vector-only когда BM25 tokens=[]~~ ✅ DONE (`HybridRetriever._vector_only_search`, 3 unit-теста).
 5. **HTTP client pooling** (singleton на runtime startup). ~2 часа.
 6. **N2 Quick-actions** «Уточнить» / «Развернуть». ~3 часа.

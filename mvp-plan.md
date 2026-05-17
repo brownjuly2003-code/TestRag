@@ -133,7 +133,7 @@ Backlog из Kimi+Codex consensus, требует архитектурного �
 
 - [ ] **Extract business logic из n8n в rag-api**: whitelist check, command routing, /help/start/clear copy → FastAPI endpoints `/auth/check`, `/commands`. После — `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`. ~1 день.
 - [ ] **OpenAPI export**: `/openapi.json` → `docs/openapi.yaml` в repo + ADR (n8n choice, BM25 in-memory, Mistral). ~4 часа.
-- [ ] **Retrieval explainability** (codex-audit#6.3): debug fields в `/ask` response (coverage, section_boost) под флагом `?debug=1`. ~2 часа.
+- [x] **Retrieval explainability** (codex-audit#6.3): `AskRequest.debug=true` → `AskResponse.debug` с `query_tokens`, `weights` (BM25/Vector/coverage_exp/section_boost), `has_vector`, per-result rows (`bm25_score`/`normalized_bm25`/`vector_score`/`coverage`/`section_boost`/`final_score`). `SearchResult` расширен полями `coverage`/`section_boost`/`normalized_bm25` (defaults сохраняют backwards-compat). 2 unit-теста (default null + breakdown shape). pytest 117/117, eval gate 7/7.
 - [x] **Empty/stop-word query fallback** (codex-audit MISSED 1.2): `HybridRetriever._vector_only_search` — на `query_tokens=[]` отдаём top-K по cosine, иначе `[]` (нет embedding/нет chunk-embeddings). 3 unit-теста. Live: stop-word query «а или и» → 3 sources score≈0.87, LLM сам отвергает через `is_pure_refusal` гард.
 - [ ] **HTTP client pooling** (codex-audit MISSED 8.3): `httpx.AsyncClient` singleton на runtime startup, lifespan event для close. ~2 часа.
 - [ ] **N2 Quick-actions**: «Уточнить» (top_k=10 rerun), «Развернуть» (full chunk content). ~3 часа.
