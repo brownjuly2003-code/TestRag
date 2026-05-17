@@ -6,7 +6,7 @@
 
 ## Current Status
 
-Updated: 2026-05-17 night (HEAD `74f45fd` — Sprint 5 closed).
+Updated: 2026-05-17 (HEAD `50699fe` — Sprint 6 #1/#6/#7 closed + overlap rollback к ТЗ).
 
 - [x] Docker Compose поднят: `postgres` (expose-only, не публикуется), `rag-api` (с healthcheck), `n8n:1.103.2` (pinned), `cloudflared` (отдельный контейнер).
 - [x] n8n workflow активирован, публичный webhook через cloudflare tunnel (trycloudflare).
@@ -127,17 +127,24 @@ Known limitations (out of MVP scope, документированы):
 - [x] **#4 LLM robustness** (P1, codex-audit#2.3/7.3/6.2): `_extract_choice_content` guard, JSONDecodeError catch в `_loads_json_object`, `MistralEmbeddingClient._observed_dim` pin + warning при mismatch, ValueError catch на response.json(), structured logger.warning.
 - [x] **#5 Hybrid weights env-параметризация** (P1): `HYBRID_BM25_WEIGHT/VECTOR_WEIGHT/COVERAGE_EXP/SECTION_BOOST_PER_TERM/SECTION_BOOST_MAX` через env (defaults = Sprint 5 baseline).
 
-## Sprint 6 — extract + observability (NEXT, не делаю в этой сессии)
+## Sprint 6 — extract + observability ✅ DONE (2026-05-17)
 
-Backlog из Kimi+Codex consensus, требует архитектурного шага.
+Backlog из Kimi+Codex consensus + Kimi audit (`kimi_audit_17_05_26.md`).
 
-- [ ] **Extract business logic из n8n в rag-api**: whitelist check, command routing, /help/start/clear copy → FastAPI endpoints `/auth/check`, `/commands`. После — `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`. ~1 день.
-- [x] **OpenAPI export**: `scripts/export_openapi.py` → `docs/openapi.yaml` + `docs/openapi.json` (8 paths, 19 schemas). Pytest gate `test_openapi_contract.py` (4 теста: schema-drift, required paths, debug field в request/response). ADR'ы в `docs/adr/`: 0001 (n8n choice), 0002 (in-memory BM25 + pgvector), 0003 (Mistral).
-- [x] **Retrieval explainability** (codex-audit#6.3): `AskRequest.debug=true` → `AskResponse.debug` с `query_tokens`, `weights` (BM25/Vector/coverage_exp/section_boost), `has_vector`, per-result rows (`bm25_score`/`normalized_bm25`/`vector_score`/`coverage`/`section_boost`/`final_score`). `SearchResult` расширен полями `coverage`/`section_boost`/`normalized_bm25` (defaults сохраняют backwards-compat). 2 unit-теста (default null + breakdown shape). pytest 117/117, eval gate 7/7.
-- [x] **Empty/stop-word query fallback** (codex-audit MISSED 1.2): `HybridRetriever._vector_only_search` — на `query_tokens=[]` отдаём top-K по cosine, иначе `[]` (нет embedding/нет chunk-embeddings). 3 unit-теста. Live: stop-word query «а или и» → 3 sources score≈0.87, LLM сам отвергает через `is_pure_refusal` гард.
-- [x] **HTTP client pooling** (codex-audit MISSED 8.3): `MistralChatClient._async_client`/`MistralEmbeddingClient._async_client` singleton lazy-init (`_get_async_client`), backed by `aclose()` cleanup из FastAPI `lifespan`. Per-call `async with httpx.AsyncClient(...)` заменён на shared instance в trёх async hot-paths (chat.answer, chat.document_plan, embed_query). Eval CI gate 71s → **29s (-60%)** на 10 golden Qs.
-- [ ] **N2 Quick-actions**: «Уточнить» (top_k=10 rerun), «Развернуть» (full chunk content). ~3 часа.
-- [ ] **Prev-N-QA в retrieval**: ablation A/B на golden Q. ~3 часа.
+- [x] **#1 Extract business logic из n8n в rag-api** (commit `2e74a17`): `tg_classifier.py` + `tg_copy.py` (118 строк JS → Python с parity-тестами); `POST /tg/classify` (whitelist+routing+copy), `GET /tg/copy/{key}` (single point of edit). Whitelist Code node — тонкий HttpRequest proxy на `http://rag-api:8000/tg/classify`. `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` в docker-compose. ALLOWED_TELEGRAM_USER_IDS теперь в rag-api env. Closes Issue #14 codex-audit#3. +32 unit-теста.
+- [x] **#2 OpenAPI export**: `scripts/export_openapi.py` → `docs/openapi.yaml` + `docs/openapi.json` (12 paths, 23 schemas после Sprint 6 #1+#6). Pytest gate `test_openapi_contract.py` (4 теста: schema-drift, required paths, debug field в request/response). ADR'ы в `docs/adr/`: 0001 (n8n choice), 0002 (in-memory BM25 + pgvector), 0003 (Mistral).
+- [x] **#3 Retrieval explainability** (codex-audit#6.3): `AskRequest.debug=true` → `AskResponse.debug` с `query_tokens`, `weights`, `has_vector`, per-result breakdown. `SearchResult` расширен `coverage`/`section_boost`/`normalized_bm25`.
+- [x] **#4 Empty/stop-word query fallback** (codex-audit MISSED 1.2): `HybridRetriever._vector_only_search` — на `query_tokens=[]` отдаём top-K по cosine.
+- [x] **#5 HTTP client pooling** (codex-audit MISSED 8.3): singleton httpx.AsyncClient + `aclose()` в FastAPI lifespan. Eval CI gate 71s → **29s (-60%)**.
+- [x] **#6 N2 Quick-actions** (commit `217b84f`): `POST /clarify` (rerun original Q с top_k=10), `GET /expand` (full chunk content). Format Answer +row 3 (🔁 Уточнить + 📖 Развернуть). n8n workflow +Clarify?/Expand? IF branches +Resolve Clarify/Expand HTTP nodes (28→32 узла). +14 unit-тестов.
+- [x] **#7 Prev-N-QA infrastructure** (commit `50699fe`): `multiturn.py` (`augment_retrieval_query` + `filter_relevant_prev_qas` skip refusal/low-conf), `AskRequest.prev_qa_count: int = 0` opt-in (0..5), augmentation идёт ТОЛЬКО в retrieval (embedding + BM25), не в LLM prompt (защита от дрейфа). `scripts/eval_multiturn.py` — 5 multi-turn cases A/B harness. +15 unit-тестов. **Live A/B отложен** (Docker cold start, см. docs/known-issues.md #16).
+
+## Что НЕ закрыто (defer до подъёма Docker)
+
+- [ ] **Eval replay при overlap=50** (post commit `f98400b`). Update `eval/baseline.json` если floor проходит. Команда в `docs/next-session.md`.
+- [ ] **Prev-N-QA live A/B**: `python scripts/eval_multiturn.py --output .tmp/eval_multiturn.json` → вписать ΔHit@1 в `docs/findings/2026-05-17-prev-n-qa-ablation.md`.
+- [ ] **TG E2E smoke с 🔁/📖**: расширить `scripts/smoke_tg_e2e.py` чтобы покрыть Sprint 6 #6 кнопки (currently только 📎/👍/👎/🧑‍💼).
+- [ ] **n8n workflow import после правок Sprint 6**: `MSYS_NO_PATHCONV=1 docker compose exec -T n8n n8n import:workflow ...` + activate + restart. См. `docs/next-session.md`.
 
 ## Sprint 7+ — production hardening (если потребуется)
 
@@ -187,8 +194,9 @@ Backlog из Kimi+Codex consensus, требует архитектурного �
 | 2 | TG webhook secret in-memory | low (только тестирование) | n/a (n8n upstream) |
 | 7 | Mistral free tier 429 | medium (prod) | paid tier для prod |
 | 10 | Cloudflare tunnel эфемерные URLs | medium (demo) | named tunnel или real domain |
-| 14 | n8n coupling (whitelist/copy в JS nodes) | medium (Kimi+Codex audit) | Sprint 6 extract |
+| 14 | ~~n8n coupling (whitelist/copy в JS nodes)~~ | ✅ RESOLVED Sprint 6 #1 (`2e74a17`) | — |
 | 15 | Postgres 127.0.0.1 binding blocked on Windows Docker | low (Hyper-V dynamic port reservation) | expose-only, firewall в prod |
+| 16 | Docker Desktop cold start ≥10мин на Win11+WSL2 | medium (блокирует live eval/smoke) | pre-warm Docker UI заранее, defer eval-replay |
 
 ## Notes
 

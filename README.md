@@ -165,7 +165,16 @@ TestRag/
 
 ## Текущий статус реализации
 
-Updated: 2026-05-16.
+Updated: 2026-05-17 (Sprint 6 #1/#6/#7 closed, overlap rolled back к ТЗ).
+
+### Свежие изменения 2026-05-17
+- **chunk_overlap 75 → 50**: восстановлено соответствие букве ТЗ (`TokenTextSplitter(chunk_size=500, chunk_overlap=50)`). Интерим-надбавка 75 (для refusal_accuracy=1.0) откатана: текущее `MIN_CONFIDENCE=0.25` + добавление `external_tk_rf_chapter_11.md` дают запас по threshold.
+- **Sprint 6 #1 — extract whitelist/routing/help из n8n** (commit `2e74a17`): 118 строк JS из Whitelist Code → Python `tg_classifier.py` + `tg_copy.py`. Endpoints `POST /tg/classify`, `GET /tg/copy/{key}`. Whitelist node — теперь тонкий HttpRequest proxy. `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`. Закрывает Issue #14 (n8n coupling).
+- **Sprint 6 #6 — N2 Quick-actions** (commit `217b84f`): `POST /clarify` (rerun original Q с top_k=10), `GET /expand` (full chunk content). Format Answer +row 3 (🔁 Уточнить + 📖 Развернуть). n8n workflow +Clarify?/Expand? branches (28 → 32 узла).
+- **Sprint 6 #7 — Prev-N-QA infrastructure** (commit `50699fe`): `AskRequest.prev_qa_count` opt-in (0..5). Augmented retrieval query (current Q + previous N questions, filter refusal/low-conf), LLM prompt не augmented. `scripts/eval_multiturn.py` — A/B harness на 5 multi-turn cases. **Live A/B отложен** до подъёма Docker (см. `docs/known-issues.md` #16).
+
+pytest: **192/192** зелёные.
+Eval baseline (overlap=75 post-Fix#1): MRR=0.78 Hit@1=0.67 Hit@5=1.00 refusal_accuracy=1.00 avg_conf=0.80.
 
 - Добавлен RAG API на FastAPI.
 - Добавлен BM25 retriever и policy отказа при низкой уверенности.

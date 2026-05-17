@@ -174,7 +174,33 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 | 11 N/A | — | — |
 | 12 n8n login | нет | нет (используем CLI/SQL) |
 | 13 intermittent latency | нет | мониторить |
-| 14 n8n coupling | нет | да (Sprint 6 extract) |
+| 14 n8n coupling | ✅ RESOLVED (Sprint 6 #1, commit `2e74a17`) | — |
 | 15 Windows postgres binding | нет (expose-only workaround) | нет (prod = firewall) |
+| 16 Docker Desktop cold start ≥10мин | нет | poll или принять и defer eval-replay |
 
-Демо-готовность: 🟢 retrieval polished (MRR=0.76), refusal=1.0, content gaps закрыты. Ephemeral tunnel (issue 10) — единственный blocker для долгой демо-сессии. Production-readiness — Sprint 6 (extract from n8n + Mistral paid tier).
+Демо-готовность: 🟢 retrieval polished (MRR=0.76 на overlap=75 / MRR=0.78 на overlap=75 post-Fix#1), refusal=1.0, content gaps закрыты. Sprint 6 #1/#6/#7 закрыты в session 2026-05-17 (n8n extract, N2 Quick-actions, Prev-N-QA infrastructure). Ephemeral tunnel (issue 10) — единственный blocker для долгой демо-сессии. Production-readiness — Mistral paid tier (issue 7) + named cloudflare tunnel + HTTPS.
+
+## 16. Docker Desktop cold start на Win11 + WSL2 = 5-10 минут
+
+**Симптом**: `docker compose up`/`docker info` отдаёт `failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified` или (после старта UI) `500 Internal Server Error`. Из-за этого live eval replay блокируется на 10+ минут даже после `Start-Process 'Docker Desktop.exe'`.
+
+**Root cause**: Hyper-V / WSL2 backend разворачивает виртуальную машину `docker-desktop`, инициализирует Linux engine, открывает named pipe. На свежей загрузке системы (или после `Get-Process | Stop-Process` reset) это занимает 5-10 минут. UI-процессы `Docker Desktop.exe` появляются быстро (15-30с), но engine API возвращает 500 пока `containerd` + `dockerd` внутри WSL не запустились полностью.
+
+**Status**: КАТЕГОРИЧЕСКИ NORMAL, не bug. Лечится временем.
+
+**Влияние на dev-workflow**: live eval (`scripts/eval_retrieval.py`, `scripts/eval_multiturn.py`) + n8n smoke (`scripts/smoke_tg_e2e.py`) требуют поднятого `rag-api` контейнера. Если daemon не up — все эти скрипты молчат/таймаутят.
+
+**Workaround**:
+1. **Pre-warm**: `Start-Process 'C:\Program Files\Docker\Docker\Docker Desktop.exe'` за 10 минут до начала работы. Не блокировать сессию ожиданием — переключиться на code-work (unit-тесты, OpenAPI, документация работают без Docker).
+2. **Poll-loop без блокировки**: `until docker info > /dev/null 2>&1; do sleep 8; done; echo READY` в фоне; продолжать работу параллельно.
+3. **Defer eval-replay**: сделать code-change + pytest gate, закоммитить, прогнать eval при следующем подъёме Docker. См. session 2026-05-17 (overlap=75→50 + Sprint 6 #6/#7) — все 4 коммита прошли без Docker.
+4. **WSL не использовать для daemon-проверки**: `wsl --list --running` показывает что WSL-distro `docker-desktop` up, но это НЕ значит что engine API ready.
+
+**Когда есть Docker (любая будущая сессия)**:
+```bash
+docker compose up -d --force-recreate rag-api
+python scripts/eval_retrieval.py --output eval/baseline.json   # overlap=50 replay
+python scripts/eval_multiturn.py --output .tmp/eval_multiturn.json   # Prev-N-QA A/B
+python scripts/smoke_tg_e2e.py   # full Telegram E2E включая 🔁/📖
+```
+Результаты вписать в `eval/baseline.json` + `docs/findings/2026-05-17-prev-n-qa-ablation.md` (§ A/B harness).

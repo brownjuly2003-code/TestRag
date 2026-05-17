@@ -7,130 +7,112 @@
 ```text
 Продолжаем D:\TestRag.
 
-Состояние HEAD post-Fix#1 (2026-05-17, to_fix.md закрыт):
-- Sprint 6 #2/#3/#4/#5 + to_fix.md Fix #1/#2 — DONE.
-- pytest 131/131. Eval CI gate `pytest scripts/test_eval_regression.py` зелёный.
-- 10 golden Qs: MRR=**0.78** Hit@1=0.67 Hit@5=**1.00** refusal=1.00 avg_conf=0.80.
-- Корпус: MVP-48 (+external_tk_rf_chapter_11.md), chunk_count=**583** (token splitter), documents=52.
-- Стек: FastAPI hybrid retrieval (token splitter cl100k_base, BM25 + vector + section rerank + frontmatter-driven metadata, `/ask?debug=true`) → Mistral (singleton httpx) → n8n (28 узлов, pin 1.103.2) → Telegram @AIagentJu_bot через cloudflared tunnel.
-- to_fix.md закрыт: Fix #2 (tiktoken cl100k_base splitter, MIN_CONFIDENCE 0.35→0.25, overlap 50→75), Fix #1 (corpus/external_tk_rf_chapter_11.md + frontmatter YAML parsing в storage.py, source_url/date из заголовка).
+Состояние HEAD `50699fe` (2026-05-17, Sprint 6 #1/#6/#7 closed + overlap rollback к ТЗ).
 
-Документация:
-- README.md — value-prop + retrieval metrics table.
-- mvp-plan.md — Sprint 4-5 done, Sprint 6 backlog.
-- docs/findings/2026-05-17-sprint4-retrieval-polish.md — детальный анализ.
-- .tmp/kimi-audit.md (185 строк) + .tmp/codex-audit.md (149 строк) — cross-audit, основание Sprint 5.
-- docs/next-session.md (этот файл).
+Свежие коммиты:
+- `50699fe` feat(api): Sprint 6 #7 — Prev-N-QA retrieval augmentation (infrastructure)
+- `217b84f` feat(api+bot): Sprint 6 #6 — N2 Quick-actions «🔁 Уточнить» / «📖 Развернуть»
+- `2e74a17` feat(api): Sprint 6 #1 — extract whitelist/routing/help из n8n в rag-api
+- `f98400b` fix(chunking): rollback chunk_overlap 75→50 (ТЗ literal compliance)
+- `116b67f` feat(corpus): внешний нормативный источник + frontmatter parsing (Fix #1)
 
-Sprint 6 backlog (если хочется продолжать):
-1. **Extract business logic из n8n** в FastAPI endpoints (whitelist, command routing, /help copy). После — N8N_BLOCK_ENV_ACCESS=true. ~1 день.
-2. ~~**OpenAPI export** в docs/openapi.yaml + ADR~~ ✅ DONE (`scripts/export_openapi.py`, gate `test_openapi_contract.py`, ADR 0001/0002/0003).
-3. ~~**Retrieval explainability** debug-поля в /ask (coverage, section_boost)~~ ✅ DONE (`AskRequest.debug=true` → `AskResponse.debug{query_tokens, weights, has_vector, results[]}`).
-4. ~~**Empty-query fallback** на vector-only когда BM25 tokens=[]~~ ✅ DONE (`HybridRetriever._vector_only_search`, 3 unit-теста).
-5. ~~**HTTP client pooling** (singleton на runtime startup)~~ ✅ DONE (lazy `_get_async_client` + `aclose` в FastAPI lifespan; eval CI 71s → 29s).
-6. **N2 Quick-actions** «Уточнить» / «Развернуть». ~3 часа.
+Тесты: pytest 192/192 зелёные (`python -m pytest -p no:schemathesis`).
+Eval baseline: на overlap=75 — MRR=0.78 Hit@1=0.67 Hit@5=1.00 refusal=1.00.
+**Eval-replay при overlap=50 — отложен**, см. ниже «Что не закрыто».
+
+Корпус: MVP-48 (+external_tk_rf_chapter_11.md), chunk_count=583, documents=52.
+
+Стек:
+- FastAPI hybrid retrieval (token splitter cl100k_base 500/50, BM25 + vector + section rerank + frontmatter-driven metadata, `/ask?debug=true`).
+- Mistral (singleton httpx).
+- n8n 32 узла (pin 1.103.2). Whitelist Code node теперь — тонкий HttpRequest proxy на /tg/classify. N8N_BLOCK_ENV_ACCESS_IN_NODE=true.
+- Telegram @AIagentJu_bot через cloudflared tunnel.
+
+Что закрыто за session 2026-05-17:
+- ✅ chunk_overlap 75→50 (буква ТЗ).
+- ✅ Sprint 6 #1 (extract whitelist/routing/help): tg_classifier.py, tg_copy.py, /tg/classify, /tg/copy/{key}; N8N_BLOCK_ENV_ACCESS_IN_NODE=true; +32 unit-теста.
+- ✅ Sprint 6 #6 (N2 Quick-actions): /clarify (rerun top_k=10), /expand (full chunk); Format Answer +row 3 (🔁 / 📖); n8n workflow +Clarify?/Expand? branches; +14 тестов.
+- ✅ Sprint 6 #7 (Prev-N-QA infrastructure): multiturn.py + AskRequest.prev_qa_count opt-in (0..5), filter_relevant_prev_qas (skip refusal/low-conf); scripts/eval_multiturn.py (5 multi-turn cases, A/B harness); +15 тестов.
+
+Что НЕ закрыто (defer на сессию с поднятым Docker — см. docs/known-issues.md #16):
+- ⏸ Live eval replay при overlap=50 → обновить eval/baseline.json.
+- ⏸ Live Prev-N-QA A/B (Sprint 6 #7) → вписать ΔHit@1 в docs/findings/2026-05-17-prev-n-qa-ablation.md.
+- ⏸ Live TG smoke E2E с 🔁 Уточнить / 📖 Развернуть кнопками (scripts/smoke_tg_e2e.py пока проверяет только 📎/👍/👎/🧑‍💼).
+- ⏸ n8n workflow import после Sprint 6 #1/#6 правок: `MSYS_NO_PATHCONV=1 docker compose exec -T n8n n8n import:workflow --input=/workflows/hr-legal-rag-workflow.json --projectId=AAx39VT08WENfUYU` + activate через SQL + `docker compose restart n8n`.
 
 Перед работой:
 - Не выводить .env, токены, ключи в чат.
-- После изменений python-кода: `docker compose build rag-api && docker compose up -d --force-recreate rag-api` (см. issue 9 в docs/known-issues.md).
-- После изменений n8n workflow: `MSYS_NO_PATHCONV=1 docker compose exec -T n8n n8n import:workflow --input=/workflows/hr-legal-rag-workflow.json --projectId=AAx39VT08WENfUYU` + activate через SQL + `docker compose restart n8n`.
-- Перед TG-смоком: убедиться что cloudflare tunnel жив (`docker logs testrag-cloudflared --tail=5` ищет `Registered tunnel connection`).
+- Docker Desktop поднимается 5-10 минут на холодную (Win11+WSL2, см. docs/known-issues.md #16). Запускать pre-warm параллельно с unit-работой, не блокироваться ожиданием.
+- После изменений python-кода: `docker compose build rag-api && docker compose up -d --force-recreate rag-api` (issue 9).
+- После изменений n8n workflow: import + activate (см. выше).
 ```
 
-## Минимальные команды
+## Когда Docker поднимется — first thing to run
+
+```powershell
+cd D:\TestRag
+
+# 0. Sanity: контейнеры up + healthcheck зелёные
+docker compose up -d
+docker ps --format "table {{.Names}}\t{{.Status}}"
+curl http://localhost:8000/health
+
+# 1. Eval replay при overlap=50 (закрывает task #9 from session 2026-05-17)
+docker compose up -d --force-recreate rag-api
+python scripts/eval_retrieval.py --output eval/baseline.json
+cat eval/baseline.json | python -c "import sys,json; r=json.load(sys.stdin); print(r['summary'])"
+# Если floor проходит (MRR≥0.60, Hit@1≥0.50, refusal≥0.85) — git commit eval/baseline.json.
+# Если просел — diff с .tmp/baseline_overlap75.json, решить: оставить 50 (ТЗ) или вернуть 75 с обоснованием.
+
+# 2. Prev-N-QA A/B (Sprint 6 #7 live)
+python scripts/eval_multiturn.py --output .tmp/eval_multiturn.json
+# Вписать ΔHit@1/ΔHit@5/ΔMRR в docs/findings/2026-05-17-prev-n-qa-ablation.md § «A/B harness».
+
+# 3. n8n workflow import после Sprint 6 #1/#6 правок
+MSYS_NO_PATHCONV=1 docker compose exec -T n8n n8n import:workflow --input=/workflows/hr-legal-rag-workflow.json --projectId=AAx39VT08WENfUYU
+docker compose exec -T postgres psql -U testrag -d testrag -c "update n8n.workflow_entity set active=true where name='TestRag HR Legal Assistant';"
+docker compose restart n8n
+
+# 4. Cloudflare tunnel — пересоздать если URL мёртвый (см. docs/demo-runbook.md)
+docker logs testrag-cloudflared --tail=5  # ищет 'Registered tunnel connection'
+
+# 5. TG E2E smoke — поправить scripts/smoke_tg_e2e.py для новых кнопок 🔁/📖
+python scripts/smoke_tg_e2e.py
+```
+
+## Минимальные команды (без Docker)
 
 ```powershell
 cd D:\TestRag
 
 # Pytest gate (быстрый, без живого API):
-python -m pytest -p no:schemathesis  # 131 passed
+python -m pytest -p no:schemathesis  # 192 passed
 
-# OpenAPI contract gate (включён в общий pytest, ловит schema drift):
+# OpenAPI contract gate (ловит schema drift):
 python -m pytest -p no:schemathesis rag-api/tests/test_openapi_contract.py  # 4 passed
 # При расхождении: python scripts/export_openapi.py → commit docs/openapi.yaml.
-
-# Eval CI regression gate (требует rag-api up, ~30 секунд после HTTP pooling):
-python -m pytest -p no:schemathesis scripts/test_eval_regression.py  # 7 passed
-
-# Поднять стек (postgres expose-only, rag-api healthcheck, n8n 1.103.2):
-docker compose up -d
-
-# Здоровье:
-curl http://localhost:8000/health    # chunk_count=189
-curl http://localhost:5678/healthz   # n8n
-docker ps --format "table {{.Names}}\t{{.Status}}"
-
-# Eval baseline run/update:
-python scripts/eval_retrieval.py --output eval/baseline.json
-cat eval/baseline.json | python -c "import sys,json; r=json.load(sys.stdin); print(r['summary'])"
-
-# /metrics observability:
-curl 'http://localhost:8000/metrics?window_hours=168'
-
-# /docs корпус summary с sample_files:
-curl http://localhost:8000/docs/summary | python -m json.tool
-
-# History live:
-curl 'http://localhost:8000/history?telegram_user_id=432751211&limit=5'
-
-# TG E2E smoke (user account через Telethon, нажимает 📎/👎/🧑‍💼):
-python scripts/smoke_tg_e2e.py       # читает D:/MCP/telegram-mcp/.env
 ```
 
-## Стек контейнеров (Sprint 5 hardened)
+## Стек контейнеров (после Sprint 6 #1)
 
-| Контейнер | Image | Status check | Внешний порт |
-|---|---|---|---|
-| `testrag-postgres-1` | `pgvector/pgvector:pg16` | pg_isready healthcheck | **expose only**, без publish |
-| `testrag-rag-api-1` | local build | urllib /health (urllib timeout=3) | `8000:8000` |
-| `testrag-n8n-1` | `n8nio/n8n:1.103.2` (pinned) | n8n healthz | `5678:5678` |
-| `testrag-cloudflared` | cloudflare/cloudflared | runtime registration | none (outbound only) |
+| Контейнер | Image | Status check | Внешний порт | Прим. |
+|---|---|---|---|---|
+| `testrag-postgres-1` | `pgvector/pgvector:pg16` | pg_isready healthcheck | **expose only**, без publish | — |
+| `testrag-rag-api-1` | local build | urllib /health (timeout=3) | `8000:8000` | +ALLOWED_TELEGRAM_USER_IDS env |
+| `testrag-n8n-1` | `n8nio/n8n:1.103.2` (pinned) | n8n healthz | `5678:5678` | **N8N_BLOCK_ENV_ACCESS_IN_NODE=true** (Sprint 6 #1) |
+| `testrag-cloudflared` | cloudflare/cloudflared | runtime registration | none (outbound only) | — |
 
 POSTGRES_PASSWORD и N8N_ENCRYPTION_KEY теперь `${VAR:?required}` — `docker compose up` упадёт если не указано в `.env`.
 
-## Sprint 5 schema check
+## Где что лежит (актуализировано session 2026-05-17)
 
-```powershell
-# Корпус (51 docs, 189 chunks):
-docker compose exec -T postgres psql -U testrag -d testrag -tA -c "select count(distinct id), count(*) from documents d join document_chunks c on c.document_id=d.id;"
-
-# Sample_files в /docs:
-docker compose exec -T postgres psql -U testrag -d testrag -tA -c "
-with categorized as (
-    select distinct d.id, d.file_name,
-        case when file_name ~ '^[0-9]+_hr_pol' then '01_hr_pol' else 'other' end as cat
-    from documents d join document_chunks c on c.document_id=d.id
-) select cat, count(*) from categorized group by 1 order by 1;
-"
-
-# Hybrid weights в runtime:
-docker compose exec -T rag-api python -c "from app.rag import HybridRetriever as R; print('bm25=',R.BM25_WEIGHT,'vec=',R.VECTOR_WEIGHT,'cov_exp=',R.COVERAGE_EXP,'sect=',R.SECTION_BOOST_MAX)"
-```
-
-## TG E2E через telegram-mcp / Telethon
-
-Установлен `chigwell/telegram-mcp` в `D:/MCP/telegram-mcp/`. Сессия — StringSession для @AIagentJu_bot whitelist (id=432751211, имя Julia).
-
-`scripts/smoke_tg_e2e.py` гоняет:
-1. send_message «Что такое controlled zone?»
-2. wait reply → verify N4 `reply_to_msg_id` == user msg_id ✓
-3. inspect inline_keyboard → 2 📎 follow-up + 2 👍/👎 ✓
-4. click первой 📎 → wait second reply (N1)
-5. click 👎 → edit reply markup → 3 reason buttons
-6. click 🧑‍💼 → wait ACK «Ваш запрос направлен HR/Legal на ручную обработку» (N3)
-7. select review_queue order by created_at desc → `human|5`
-
-## Если cloudflare tunnel умер
-
-`docker logs testrag-cloudflared` пусто или контейнер не запущен → URLs эфемерные. Процедура восстановления — `docs/demo-runbook.md` раздел «Локальный Telegram Webhook».
-
-## Где что лежит
-
-- **Корпус** — `corpus/*.md` (200 файлов, 7 категорий). MVP подмножество — `manifests/MVP_CORPUS_FILES.txt` (47 файлов).
-- **rag-api** — `rag-api/app/{main,rag,storage,llm,prompts}.py`. Тесты — `rag-api/tests/`.
-- **n8n workflow** — `n8n/workflows/hr-legal-rag-workflow.json` (28 узлов).
-- **Eval** — `scripts/eval_retrieval.py` (10 golden Qs) + `scripts/test_eval_regression.py` (pytest gate) + `eval/baseline.json` (закоммичен).
-- **Cross-audit (Kimi+Codex)** — `.tmp/kimi-audit.md` (185 строк) + `.tmp/codex-audit.md` (149 строк). Обновлены 2026-05-17 night.
-- **Findings** — `docs/findings/2026-05-17-sprint4-retrieval-polish.md`.
-- **Research** — `docs/research/{kimi,codex}-bot-ux.md` + `SYNTHESIS.md` (Sprint 1-3 roadmap).
-- **Known issues** — `docs/known-issues.md`.
+- **Корпус** — `corpus/*.md` (200 файлов + external_tk_rf_chapter_11.md, 7 категорий + федеральный закон). MVP — `manifests/MVP_CORPUS_FILES.txt` (48 файлов).
+- **rag-api** — `rag-api/app/{main,rag,storage,llm,settings,tg_classifier,tg_copy,multiturn,prompts}.py`.
+- **Тесты** — `rag-api/tests/test_{api,rag,llm,n8n_workflow,openapi_contract,ingestion,tg_classifier,multiturn}.py` (192/192).
+- **n8n workflow** — `n8n/workflows/hr-legal-rag-workflow.json` (32 узла).
+- **Eval** — `scripts/eval_retrieval.py` (10 single-turn golden Qs), `scripts/eval_multiturn.py` (5 multi-turn cases A/B), `scripts/test_eval_regression.py` (pytest gate), `eval/baseline.json` (closed, overlap=75; replay при overlap=50 deferred).
+- **Cross-audit** — `kimi_audit_17_05_26.md` (Kimi полный аудит).
+- **Findings** — `docs/findings/2026-05-17-{sprint4-retrieval-polish,prev-n-qa-ablation}.md`.
+- **Known issues** — `docs/known-issues.md` (16 issues, #14 RESOLVED, #16 NEW Docker cold start).
+- **ADR** — `docs/adr/0001-orchestrator-n8n.md`, `0002-bm25-plus-pgvector-hybrid.md`, `0003-mistral-llm.md`.
+- **OpenAPI** — `docs/openapi.yaml/.json` (12 paths, 23 schemas; gate в test_openapi_contract.py).
