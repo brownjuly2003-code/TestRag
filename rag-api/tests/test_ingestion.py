@@ -1,7 +1,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from app.storage import PostgresStore
+from app.storage import PostgresStore, _parse_frontmatter
 
 
 class FakeCursor:
@@ -168,3 +168,90 @@ def test_ingestion_replaces_chunks_when_existing_document_changes(monkeypatch):
     assert cursor.deleted_document_ids == ["document-1"]
     assert cursor.inserted_chunks
     assert cursor.inserted_chunks[0][2] == "# Policy\n\nНовый текст политики."
+
+
+# ---- Fix #1 step 4: frontmatter parsing ----
+
+
+def test_parse_frontmatter_extracts_source_url_and_date():
+    text = (
+        "---\n"
+        "doc_id: external_tk_rf_chapter_11\n"
+        "source_url: \"https://www.consultant.ru/document/cons_doc_LAW_34683/\"\n"
+        "effective_date: \"2024-01-01\"\n"
+        "document_type: federal_law\n"
+        "version: \"v1\"\n"
+        "---\n"
+        "# Глава 11\n\nТекст.\n"
+    )
+    meta, body = _parse_frontmatter(text)
+    assert meta["source_url"] == "https://www.consultant.ru/document/cons_doc_LAW_34683/"
+    assert meta["effective_date"] == "2024-01-01"
+    assert meta["document_type"] == "federal_law"
+    assert body.startswith("# Глава 11")
+    assert "doc_id" not in body
+
+
+def test_parse_frontmatter_no_frontmatter_returns_empty_meta():
+    text = "# Просто markdown\n\nТело документа без frontmatter."
+    meta, body = _parse_frontmatter(text)
+    assert meta == {}
+    assert body == text
+
+
+def test_parse_frontmatter_malformed_yaml_returns_empty_meta():
+    text = "---\nthis: is\n  not: valid: yaml: at: all\n---\n# Тело"
+    meta, body = _parse_frontmatter(text)
+    # Сломанный YAML — обработка не должна падать, возвращаем {} и оригинальный текст.
+    assert meta == {}
+    assert body == text
+
+
+def test_ingestion_uses_frontmatter_source_url_not_hardcode(monkeypatch):
+    """Fix #1 step 4: source_url из YAML frontmatter попадает в metadata
+    каждого chunk'а, не хардкод ''."""
+    Path(".pytest_cache").mkdir(exist_ok=True)
+    with TemporaryDirectory(dir=Path(".pytest_cache")) as temp_dir:
+        docs_path = Path(temp_dir) / "docs"
+        docs_path.mkdir()
+        (docs_path / "external.md").write_text(
+            "---\n"
+            "source_url: https://www.consultant.ru/document/cons_doc_LAW_34683/\n"
+            "effective_date: \"2024-01-01\"\n"
+            "document_type: federal_law\n"
+            "---\n"
+            "# Глава 11\n\nКонспект статьи 70 ТК РФ.\n",
+            encoding="utf-8",
+        )
+        cursor = FakeCursor()
+        store = PostgresStore("postgresql://local/test")
+        monkeypatch.setattr(store, "_connect", lambda: FakeConnection(cursor))
+        store.ingest_documents(docs_path, FakeEmbeddingClient())
+
+    assert cursor.inserted_chunks
+    # params[4] — Jsonb wrapper, достанем dict через .obj
+    metadata = cursor.inserted_chunks[0][4]
+    payload = metadata.obj if hasattr(metadata, "obj") else metadata
+    assert payload["source_url"] == "https://www.consultant.ru/document/cons_doc_LAW_34683/"
+    assert payload["date"] == "2024-01-01"
+    assert payload["document_type"] == "federal_law"
+
+
+def test_ingestion_falls_back_to_defaults_without_frontmatter(monkeypatch):
+    """Файлы без frontmatter получают date=_DEFAULT_DOC_DATE, source_url=''."""
+    Path(".pytest_cache").mkdir(exist_ok=True)
+    with TemporaryDirectory(dir=Path(".pytest_cache")) as temp_dir:
+        docs_path = Path(temp_dir) / "docs"
+        docs_path.mkdir()
+        (docs_path / "internal.md").write_text("# Заголовок\n\nТекст без frontmatter.", encoding="utf-8")
+        cursor = FakeCursor()
+        store = PostgresStore("postgresql://local/test")
+        monkeypatch.setattr(store, "_connect", lambda: FakeConnection(cursor))
+        store.ingest_documents(docs_path, FakeEmbeddingClient())
+
+    assert cursor.inserted_chunks
+    payload = cursor.inserted_chunks[0][4]
+    payload = payload.obj if hasattr(payload, "obj") else payload
+    assert payload["source_url"] == ""
+    assert payload["date"] == "2026-05-15"
+    assert payload["document_type"] == "demo"

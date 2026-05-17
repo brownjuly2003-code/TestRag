@@ -7,13 +7,13 @@
 ```text
 Продолжаем D:\TestRag.
 
-Состояние HEAD `e983509` (2026-05-17, Sprint 6 +4 items):
-- Sprint 4 retrieval polish + BCG demo bar + Sprint 5 cross-audit hardening + Sprint 6 #2/#3/#4/#5 — DONE.
-- pytest 121/121. Eval CI gate `pytest scripts/test_eval_regression.py` зелёный, **71s → 29s после HTTP pooling**.
-- 10 golden Qs: MRR=0.76 Hit@1=0.67 Hit@5=0.89 refusal=1.00 avg_conf=0.85.
-- Корпус: MVP-47, chunk_count=189, documents=51.
-- Стек: FastAPI hybrid retrieval (BM25 + vector + section rerank, weights env, `/ask?debug=true` explainability) → Mistral (singleton httpx) → n8n (28 узлов, pin 1.103.2) → Telegram @AIagentJu_bot через cloudflared tunnel (URL ephemeral).
-- Sprint 5 закрыл P0/P1 из Kimi+Codex cross-audit. Sprint 6: empty-query fallback, retrieval explainability в /ask, HTTP client pooling, OpenAPI export + ADR.
+Состояние HEAD post-Fix#1 (2026-05-17, to_fix.md закрыт):
+- Sprint 6 #2/#3/#4/#5 + to_fix.md Fix #1/#2 — DONE.
+- pytest 131/131. Eval CI gate `pytest scripts/test_eval_regression.py` зелёный.
+- 10 golden Qs: MRR=**0.78** Hit@1=0.67 Hit@5=**1.00** refusal=1.00 avg_conf=0.80.
+- Корпус: MVP-48 (+external_tk_rf_chapter_11.md), chunk_count=**583** (token splitter), documents=52.
+- Стек: FastAPI hybrid retrieval (token splitter cl100k_base, BM25 + vector + section rerank + frontmatter-driven metadata, `/ask?debug=true`) → Mistral (singleton httpx) → n8n (28 узлов, pin 1.103.2) → Telegram @AIagentJu_bot через cloudflared tunnel.
+- to_fix.md закрыт: Fix #2 (tiktoken cl100k_base splitter, MIN_CONFIDENCE 0.35→0.25, overlap 50→75), Fix #1 (corpus/external_tk_rf_chapter_11.md + frontmatter YAML parsing в storage.py, source_url/date из заголовка).
 
 Документация:
 - README.md — value-prop + retrieval metrics table.
@@ -43,7 +43,7 @@ Sprint 6 backlog (если хочется продолжать):
 cd D:\TestRag
 
 # Pytest gate (быстрый, без живого API):
-python -m pytest -p no:schemathesis  # 121 passed
+python -m pytest -p no:schemathesis  # 131 passed
 
 # OpenAPI contract gate (включён в общий pytest, ловит schema drift):
 python -m pytest -p no:schemathesis rag-api/tests/test_openapi_contract.py  # 4 passed

@@ -47,3 +47,5 @@
 07_faq_expedition.md
 07_faq_transport_road.md
 07_faq_claims_procedure.md
+# Fix #1: внешний нормативный источник с провенансом (source_url, effective_date).
+external_tk_rf_chapter_11.md

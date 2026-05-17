@@ -4,9 +4,44 @@ from pathlib import Path
 from typing import Any
 
 import psycopg
+import yaml
 from psycopg.types.json import Jsonb
 
 from .rag import DocumentChunk, split_text
+
+
+_DEFAULT_DOC_DATE = "2026-05-15"
+
+
+def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
+    """Fix #1 step 4: разбираем YAML frontmatter из corpus/*.md.
+
+    Frontmatter формат:
+
+        ---
+        source_url: https://...
+        effective_date: 2024-01-01
+        document_type: federal_law
+        ---
+        # Заголовок
+
+    Возвращает (meta, body). Если frontmatter нет/невалидный — meta={} и
+    body=text как есть.
+    """
+    if not text.startswith("---"):
+        return {}, text
+    parts = text.split("\n---", 1)
+    if len(parts) != 2:
+        return {}, text
+    raw = parts[0][3:].lstrip("\n")
+    body = parts[1].lstrip("\n")
+    try:
+        data = yaml.safe_load(raw) or {}
+    except yaml.YAMLError:
+        return {}, text
+    if not isinstance(data, dict):
+        return {}, text
+    return data, body
 
 
 class PostgresStore:
@@ -29,7 +64,11 @@ class PostgresStore:
             cursor = conn.cursor()
             for file_path in _iter_document_files(docs_path, manifest_path):
                 document_id = self._get_or_create_document(cursor, file_path)
-                text = file_path.read_text(encoding="utf-8")
+                raw_text = file_path.read_text(encoding="utf-8")
+                # Fix #1 step 4: frontmatter parsing — source_url / effective_date /
+                # document_type / version подставляем из YAML заголовка, не из
+                # хардкода "2026-05-15".
+                frontmatter, text = _parse_frontmatter(raw_text)
                 section = _detect_section(text)
                 chunks = split_text(text)
                 cursor.execute(
@@ -43,14 +82,24 @@ class PostgresStore:
                 if existing_chunks:
                     cursor.execute("delete from document_chunks where document_id = %s", (document_id,))
 
+                doc_date = str(
+                    frontmatter.get("effective_date")
+                    or frontmatter.get("date")
+                    or _DEFAULT_DOC_DATE
+                )
+                source_url = str(frontmatter.get("source_url") or "")
+                document_type = str(frontmatter.get("document_type") or "demo")
+                version = str(frontmatter.get("version") or "v1")
+
                 embeddings = embedding_client.embed_texts(chunks) if chunks else []
                 for index, chunk_text in enumerate(chunks):
                     metadata = {
                         "file": file_path.name,
                         "section": section,
-                        "date": "2026-05-15",
-                        "source_url": "",
-                        "document_type": "demo",
+                        "date": doc_date,
+                        "source_url": source_url,
+                        "document_type": document_type,
+                        "version": version,
                     }
                     embedding = embeddings[index] if index < len(embeddings) else None
                     cursor.execute(
