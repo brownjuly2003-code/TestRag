@@ -154,9 +154,11 @@ def test_unknown_bad_reason_falls_back_to_direct_reply():
 def test_direct_reply_routes_without_rag_call():
     workflow = _load_workflow()
     assert workflow["connections"]["Feedback?"]["main"][1][0]["node"] == "Bad Clarify?"
-    # Bad Clarify? no → Followup? → (no) → Direct Reply?
+    # Sprint 6 #6: Bad Clarify? no → Followup? → (no) → Clarify? → (no) → Expand? → (no) → Direct Reply?
     assert workflow["connections"]["Bad Clarify?"]["main"][1][0]["node"] == "Followup?"
-    assert workflow["connections"]["Followup?"]["main"][1][0]["node"] == "Direct Reply?"
+    assert workflow["connections"]["Followup?"]["main"][1][0]["node"] == "Clarify?"
+    assert workflow["connections"]["Clarify?"]["main"][1][0]["node"] == "Expand?"
+    assert workflow["connections"]["Expand?"]["main"][1][0]["node"] == "Direct Reply?"
     assert workflow["connections"]["Direct Reply?"]["main"][0][0]["node"] == "Send Direct Reply"
     assert workflow["connections"]["Direct Reply?"]["main"][1][0]["node"] == "History?"
     assert workflow["connections"]["Docs?"]["main"][1][0]["node"] == "Send Typing"
@@ -644,12 +646,46 @@ def test_followup_branch_routes_through_resolve_then_typing_then_ask():
     assert workflow["connections"]["Bad Clarify?"]["main"][1][0]["node"] == "Followup?"
     # Followup? yes → Resolve Follow-up
     assert workflow["connections"]["Followup?"]["main"][0][0]["node"] == "Resolve Follow-up"
-    # Followup? no → Direct Reply?
-    assert workflow["connections"]["Followup?"]["main"][1][0]["node"] == "Direct Reply?"
+    # Sprint 6 #6: Followup? no → Clarify? (не Direct Reply? напрямую)
+    assert workflow["connections"]["Followup?"]["main"][1][0]["node"] == "Clarify?"
     # Resolve → Send Typing FU → Ask RAG FU → Format Answer
     assert workflow["connections"]["Resolve Follow-up"]["main"][0][0]["node"] == "Send Typing Followup"
     assert workflow["connections"]["Send Typing Followup"]["main"][0][0]["node"] == "Ask RAG Followup"
     assert workflow["connections"]["Ask RAG Followup"]["main"][0][0]["node"] == "Format Answer"
+
+
+def test_clarify_branch_routes_through_resolve_to_format_answer():
+    """Sprint 6 #6 N2 Quick-actions: clarify → /clarify (POST) → Format Answer."""
+    workflow = _load_workflow()
+    nodes = {n["name"]: n for n in workflow["nodes"]}
+    for required in ["Clarify?", "Resolve Clarify"]:
+        assert required in nodes, f"missing {required}"
+    assert workflow["connections"]["Clarify?"]["main"][0][0]["node"] == "Resolve Clarify"
+    assert workflow["connections"]["Clarify?"]["main"][1][0]["node"] == "Expand?"
+    assert workflow["connections"]["Resolve Clarify"]["main"][0][0]["node"] == "Format Answer"
+    # /clarify endpoint POST, request_log_id из Whitelist
+    resolve = nodes["Resolve Clarify"]
+    assert resolve["type"] == "n8n-nodes-base.httpRequest"
+    assert resolve["parameters"]["method"] == "POST"
+    assert "/clarify" in resolve["parameters"]["url"]
+    assert "$node['Whitelist'].json.request_log_id" in resolve["parameters"]["url"]
+
+
+def test_expand_branch_routes_through_resolve_to_send_direct_reply():
+    """Sprint 6 #6: expand → /expand (GET) → Send Direct Reply (parse_mode HTML)."""
+    workflow = _load_workflow()
+    nodes = {n["name"]: n for n in workflow["nodes"]}
+    for required in ["Expand?", "Resolve Expand"]:
+        assert required in nodes, f"missing {required}"
+    assert workflow["connections"]["Expand?"]["main"][0][0]["node"] == "Resolve Expand"
+    assert workflow["connections"]["Expand?"]["main"][1][0]["node"] == "Direct Reply?"
+    assert workflow["connections"]["Resolve Expand"]["main"][0][0]["node"] == "Send Direct Reply"
+    resolve = nodes["Resolve Expand"]
+    assert resolve["type"] == "n8n-nodes-base.httpRequest"
+    assert resolve["parameters"]["method"] == "GET"
+    assert "/expand" in resolve["parameters"]["url"]
+    assert "$node['Whitelist'].json.request_log_id" in resolve["parameters"]["url"]
+    assert "$node['Whitelist'].json.followup_idx" in resolve["parameters"]["url"]
 
 
 def test_resolve_followup_node_calls_followup_endpoint_with_whitelist_params():
@@ -673,7 +709,8 @@ def test_ask_rag_followup_reads_question_from_resolve_node():
     assert "$json.question" not in body
 
 
-def test_format_answer_emits_inline_keyboard_with_followup_and_feedback_buttons_on_last_part():
+def test_format_answer_emits_inline_keyboard_with_followup_quick_actions_and_feedback_on_last_part():
+    """Sprint 6 #6: keyboard теперь 3 ряда — followup, quick-actions, feedback."""
     items = _run_format_answer_all(
         {
             "answer": "Короткий ответ про controlled zone.",
@@ -689,26 +726,32 @@ def test_format_answer_emits_inline_keyboard_with_followup_and_feedback_buttons_
     keyboard = items[0]["inline_keyboard"]
     assert keyboard is not None
     rows = keyboard["inline_keyboard"]
-    # 2 follow-up + 2 feedback = 2 ряда
-    assert len(rows) == 2
-    follow_row, fb_row = rows
-    assert all(b["callback_data"].startswith("followup:") for b in follow_row)
+    assert len(rows) == 3
+    follow_row, quick_row, fb_row = rows
     assert [b["callback_data"] for b in follow_row] == [
         "followup:0:rl-abc",
         "followup:1:rl-abc",
     ]
     assert all(b["text"].startswith("📎") for b in follow_row)
+    # quick-actions: clarify + expand (sources есть)
+    assert [b["callback_data"] for b in quick_row] == [
+        "clarify:rl-abc",
+        "expand:0:rl-abc",
+    ]
+    assert quick_row[0]["text"] == "🔁 Уточнить"
+    assert quick_row[1]["text"] == "📖 Развернуть"
     assert [b["callback_data"] for b in fb_row] == [
         "feedback:good:rl-abc",
         "feedback:bad:rl-abc",
     ]
-    # callback_data ≤ 64 bytes (Telegram limit)
     for row in rows:
         for b in row:
             assert len(b["callback_data"].encode("utf-8")) <= 64
 
 
-def test_format_answer_omits_followup_row_when_no_sources():
+def test_format_answer_omits_followup_and_expand_when_no_sources():
+    """Sprint 6 #6: при пустых sources — followup row отсутствует, expand тоже
+    (он работает по top-1 source). Clarify остаётся — переспрашивает оригинал."""
     items = _run_format_answer_all(
         {
             "answer": "Не нашёл подходящих источников.",
@@ -718,8 +761,10 @@ def test_format_answer_omits_followup_row_when_no_sources():
     )
     keyboard = items[0]["inline_keyboard"]
     rows = keyboard["inline_keyboard"]
-    assert len(rows) == 1  # только feedback row
-    assert [b["callback_data"] for b in rows[0]] == [
+    assert len(rows) == 2
+    quick_row, fb_row = rows
+    assert [b["callback_data"] for b in quick_row] == ["clarify:rl-empty"]
+    assert [b["callback_data"] for b in fb_row] == [
         "feedback:good:rl-empty",
         "feedback:bad:rl-empty",
     ]

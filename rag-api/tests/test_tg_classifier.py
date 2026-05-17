@@ -204,3 +204,34 @@ def test_parse_allowed_ids_handles_whitespace():
     assert classifier_mod.parse_allowed_ids(" 42 , 100 , ") == ["42", "100"]
     assert classifier_mod.parse_allowed_ids("") == []
     assert classifier_mod.parse_allowed_ids(None) == []  # type: ignore[arg-type]
+
+
+# ---------- Sprint 6 #6 N2 Quick-actions ----------
+
+
+def test_clarify_callback_routes_to_clarify_request():
+    out = classifier_mod.classify(_cb("clarify:rl-uuid-123"), ALLOWED)
+    assert out["event_type"] == "clarify_request"
+    assert out["request_log_id"] == "rl-uuid-123"
+
+
+def test_clarify_empty_request_log_id_falls_back():
+    out = classifier_mod.classify(_cb("clarify:"), ALLOWED)
+    assert out["event_type"] == "direct_reply"
+
+
+def test_expand_callback_routes_to_expand_request_with_idx():
+    out = classifier_mod.classify(_cb("expand:2:rl-uuid"), ALLOWED)
+    assert out["event_type"] == "expand_request"
+    assert out["followup_idx"] == 2
+    assert out["request_log_id"] == "rl-uuid"
+
+
+def test_expand_negative_idx_falls_back():
+    out = classifier_mod.classify(_cb("expand:-1:rl"), ALLOWED)
+    assert out["event_type"] == "direct_reply"
+
+
+def test_expand_missing_rl_falls_back():
+    out = classifier_mod.classify(_cb("expand:0:"), ALLOWED)
+    assert out["event_type"] == "direct_reply"

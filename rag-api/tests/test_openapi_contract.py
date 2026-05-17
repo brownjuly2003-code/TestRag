@@ -46,6 +46,9 @@ def test_openapi_required_paths_present():
         # Sprint 6 #1: n8n routing → rag-api
         "/tg/classify",
         "/tg/copy/{key}",
+        # Sprint 6 #6: N2 Quick-actions
+        "/clarify",
+        "/expand",
     }
     missing = required - paths
     assert not missing, f"Missing required paths: {missing}"

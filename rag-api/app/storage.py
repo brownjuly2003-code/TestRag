@@ -415,6 +415,26 @@ class PostgresStore:
         entry = sources[idx]
         return entry if isinstance(entry, dict) else None
 
+    def get_request_question(self, request_log_id: str) -> str | None:
+        """Sprint 6 #6 (N2 Quick-actions): забрать оригинальный вопрос по request_log_id
+        для /clarify rerun."""
+        if not self.enabled or not request_log_id:
+            return None
+        try:
+            with self._connect() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "select question from request_logs where id::text = %s",
+                    (request_log_id,),
+                )
+                row = cursor.fetchone()
+        except psycopg.errors.InvalidTextRepresentation:
+            return None
+        if not row:
+            return None
+        question = row[0]
+        return question if isinstance(question, str) and question.strip() else None
+
     def enqueue_review(
         self,
         request_log_id: str | None,

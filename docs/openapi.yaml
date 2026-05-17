@@ -185,6 +185,71 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /clarify:
+    post:
+      summary: Clarify
+      description: 'Sprint 6 #6 (N2 Quick-actions): «🔁 Уточнить» rerun на оригинальный вопрос
+
+        с расширенным top_k=10 для более глубокого поиска. Возвращает новый
+
+        AskResponse как обычный /ask, с новым request_log_id.'
+      operationId: clarify_clarify_post
+      parameters:
+      - name: request_log_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Request Log Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AskResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /expand:
+    get:
+      summary: Expand
+      description: 'Sprint 6 #6 (N2 Quick-actions): «📖 Развернуть» — полный текст top-N
+
+        источника. Возвращает full chunk content (не snippet) для конкретного
+
+        индекса из request_log.sources.'
+      operationId: expand_expand_get
+      parameters:
+      - name: request_log_id
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Request Log Id
+      - name: idx
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Idx
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpandResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /metrics:
     get:
       summary: Metrics
@@ -488,6 +553,36 @@ components:
       - sources
       - user_message
       title: DocumentTypeResponse
+    ExpandResponse:
+      properties:
+        text:
+          type: string
+          title: Text
+        chunk_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chunk Id
+        file:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File
+        section:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Section
+        source_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Url
+      type: object
+      required:
+      - text
+      title: ExpandResponse
+      description: 'Sprint 6 #6 N2 Quick-actions: full chunk content для «📖 Развернуть».'
     FeedbackRequest:
       properties:
         request_log_id:

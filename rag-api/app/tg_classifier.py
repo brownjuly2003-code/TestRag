@@ -69,6 +69,11 @@ def classify(update: dict[str, Any], allowed_ids: list[str]) -> dict[str, Any]:
     is_feedback = len(feedback_parts) >= 2
     followup_parts = callback_data.split(":") if callback_data.startswith("followup:") else []
     is_followup = len(followup_parts) == 3
+    # Sprint 6 #6 N2 Quick-actions:
+    clarify_parts = callback_data.split(":") if callback_data.startswith("clarify:") else []
+    is_clarify = len(clarify_parts) == 2
+    expand_parts = callback_data.split(":") if callback_data.startswith("expand:") else []
+    is_expand = len(expand_parts) == 3
 
     message = update.get("message") or callback_query.get("message") or {}
     from_obj = (update.get("message") or {}).get("from") or callback_query.get("from") or {}
@@ -87,6 +92,10 @@ def classify(update: dict[str, Any], allowed_ids: list[str]) -> dict[str, Any]:
         event_type = "feedback"
     elif is_followup:
         event_type = "followup_request"
+    elif is_clarify:
+        event_type = "clarify_request"
+    elif is_expand:
+        event_type = "expand_request"
     else:
         event_type = "question"
     text = raw_text
@@ -122,7 +131,20 @@ def classify(update: dict[str, Any], allowed_ids: list[str]) -> dict[str, Any]:
             event_type = "direct_reply"
             text = tg_copy.UNRECOGNIZED_FOLLOWUP_TEXT
 
-    if not is_feedback and not is_followup:
+    if is_clarify:
+        request_log_id = clarify_parts[1] or None
+        if not request_log_id:
+            event_type = "direct_reply"
+            text = tg_copy.UNRECOGNIZED_FOLLOWUP_TEXT
+
+    if is_expand:
+        followup_idx = _safe_int(expand_parts[1])
+        request_log_id = expand_parts[2] or None
+        if followup_idx is None or not request_log_id:
+            event_type = "direct_reply"
+            text = tg_copy.UNRECOGNIZED_FOLLOWUP_TEXT
+
+    if not is_feedback and not is_followup and not is_clarify and not is_expand:
         if not normalized:
             event_type = "direct_reply"
             text = tg_copy.EMPTY_INPUT_TEXT

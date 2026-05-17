@@ -168,6 +168,15 @@ class FollowupResponse(BaseModel):
     source: FollowupSource
 
 
+class ExpandResponse(BaseModel):
+    """Sprint 6 #6 N2 Quick-actions: full chunk content для «📖 Развернуть»."""
+    text: str
+    chunk_id: str | None = None
+    file: str | None = None
+    section: str | None = None
+    source_url: str | None = None
+
+
 CORPUS_CATEGORY_LABELS: dict[str, str] = {
     "01_hr_pol": "HR — политики и регламенты",
     "02_hr_tpl": "HR — шаблоны кадровых документов",
@@ -904,6 +913,50 @@ def followup(request_log_id: str, idx: int = 0) -> FollowupResponse:
             section=source.get("section"),
             score=source.get("score"),
         ),
+    )
+
+
+@app.post("/clarify", response_model=AskResponse)
+async def clarify(request_log_id: str) -> AskResponse:
+    """Sprint 6 #6 (N2 Quick-actions): «🔁 Уточнить» rerun на оригинальный вопрос
+    с расширенным top_k=10 для более глубокого поиска. Возвращает новый
+    AskResponse как обычный /ask, с новым request_log_id."""
+    if not request_log_id:
+        raise HTTPException(status_code=400, detail="request_log_id required")
+    runtime = get_runtime()
+    question = runtime.store.get_request_question(request_log_id)
+    if not question:
+        raise HTTPException(status_code=404, detail="request_log not found")
+    return await ask(AskRequest(question=question, telegram_user_id=None, top_k=10))
+
+
+@app.get("/expand", response_model=ExpandResponse)
+def expand(request_log_id: str, idx: int = 0) -> ExpandResponse:
+    """Sprint 6 #6 (N2 Quick-actions): «📖 Развернуть» — полный текст top-N
+    источника. Возвращает full chunk content (не snippet) для конкретного
+    индекса из request_log.sources."""
+    if not request_log_id:
+        raise HTTPException(status_code=400, detail="request_log_id required")
+    if idx < 0 or idx > 9:
+        raise HTTPException(status_code=400, detail="idx must be in [0, 9]")
+    runtime = get_runtime()
+    source = runtime.store.get_request_source(request_log_id, idx)
+    if not source:
+        raise HTTPException(status_code=404, detail="source not found")
+    chunk_id = source.get("chunk_id")
+    chunk = next((c for c in runtime.chunks if c.chunk_id == chunk_id), None)
+    if chunk is None:
+        raise HTTPException(status_code=404, detail="chunk not found in current index")
+    file_name = source.get("file") or "(без имени файла)"
+    section = source.get("section") or ""
+    header_section = f" · {section}" if section else ""
+    text = f"📖 <code>{file_name}</code>{header_section}\n\n{chunk.content}"
+    return ExpandResponse(
+        text=text,
+        chunk_id=chunk_id,
+        file=source.get("file"),
+        section=source.get("section"),
+        source_url=chunk.metadata.get("source_url"),
     )
 
 

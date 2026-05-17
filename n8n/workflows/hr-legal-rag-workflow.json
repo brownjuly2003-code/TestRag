@@ -390,7 +390,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const TG_MAX = 4000;\n\nconst escapeHtml = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst mdToHtml = (s) => {\n  s = s.replace(/`([^`\\n]+)`/g, '<code>$1</code>');\n  s = s.replace(/\\*\\*([^*\\n]+?)\\*\\*/g, '<b>$1</b>');\n  s = s.replace(/^- /gm, '• ');\n  s = s.replace(/^\\* /gm, '• ');\n  return s;\n};\nconst balanceTags = (s) => {\n  ['b', 'code', 'i'].forEach(tag => {\n    const opens = (s.match(new RegExp(`<${tag}>`, 'g')) || []).length;\n    const closes = (s.match(new RegExp(`</${tag}>`, 'g')) || []).length;\n    if (opens > closes) s = s + `</${tag}>`.repeat(opens - closes);\n    if (closes > opens) s = `<${tag}>`.repeat(closes - opens) + s;\n  });\n  return s;\n};\n\nconst confidenceChip = (conf) => {\n  if (conf == null) return '';\n  if (conf >= 0.7) return '🟢 <b>Высокая уверенность</b>';\n  if (conf >= 0.4) return '🟡 <b>Средняя уверенность</b> — сверьтесь с источником';\n  if (conf > 0) return '🟠 <b>Низкая уверенность</b> — рассмотрите 🧑‍💼 эскалацию';\n  return '';\n};\n\nconst REFUSAL_PATTERNS = [\n  /данных недостаточно/i,\n  /не нашел? в (предоставленных |)источниках/i,\n  /не содерж[аи]т (информации|ответа)/i,\n  /отсутствует определение/i,\n  /в (корпусе|базе знаний) нет/i,\n  /не нашел подходящих/i,\n];\nconst looksRefusal = (s) => REFUSAL_PATTERNS.some(re => re.test(s));\n\nconst splitIntoParts = (full, max) => {\n  if (full.length <= max) return [full];\n  const parts = [];\n  const paragraphs = full.split('\\n\\n');\n  let current = '';\n  const flush = () => { if (current) { parts.push(current); current = ''; } };\n  for (const para of paragraphs) {\n    const candidate = current ? current + '\\n\\n' + para : para;\n    if (candidate.length <= max) { current = candidate; continue; }\n    flush();\n    if (para.length <= max) { current = para; continue; }\n    const sentences = para.split(/(?<=[.!?])\\s+/);\n    let sCur = '';\n    for (const s of sentences) {\n      const sCand = sCur ? sCur + ' ' + s : s;\n      if (sCand.length <= max) { sCur = sCand; continue; }\n      if (sCur) { parts.push(sCur); sCur = ''; }\n      if (s.length > max) {\n        for (let i = 0; i < s.length; i += max) parts.push(s.slice(i, i + max));\n      } else {\n        sCur = s;\n      }\n    }\n    if (sCur) parts.push(sCur);\n  }\n  flush();\n  return parts.map(balanceTags);\n};\n\nconst truncate = (s, max) => {\n  const str = String(s == null ? '' : s);\n  return str.length <= max ? str : str.slice(0, max - 1) + '…';\n};\n\nconst seenFiles = new Set();\nconst dedupedSources = [];\nconst originalSources = $json.sources || [];\noriginalSources.forEach((s, originalIdx) => {\n  const file = s.file || s.chunk_id || '';\n  if (file && seenFiles.has(file)) return;\n  seenFiles.add(file);\n  dedupedSources.push({ ...s, _originalIdx: originalIdx });\n});\nconst sourcesBlock = dedupedSources.map((s, i) => {\n  const file = escapeHtml(s.file || s.chunk_id || 'unknown');\n  const section = escapeHtml(s.section || 'раздел не указан');\n  return `${i + 1}. <code>${file}</code> — ${section}`;\n}).join('\\n');\n\nconst count = dedupedSources.length;\nconst pluralRu = (n) => {\n  const mod10 = n % 10;\n  const mod100 = n % 100;\n  if (mod10 === 1 && mod100 !== 11) return 'релевантный документ';\n  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'релевантных документа';\n  return 'релевантных документов';\n};\n\nconst rawAnswer = $json.answer || '';\nconst isRefusal = $json.refused === true || looksRefusal(rawAnswer);\nconst conf = $json.confidence;\nconst chip = isRefusal ? '' : confidenceChip(conf);\n\nconst answerHtml = mdToHtml(escapeHtml(rawAnswer));\nconst summary = count > 0 ? `Найдено ${count} ${pluralRu(count)}.` : 'По базе знаний не найдено подходящих документов.';\n\nconst nextSteps = isRefusal\n  ? '\\n\\n<b>Что делать дальше:</b>\\n• уточните вопрос конкретнее (термины, документ, дата)\\n• посмотрите покрытие — /docs\\n• для эскалации к HR/Legal — кнопка 🧑‍💼 ниже'\n  : '';\n\nconst header = chip ? `${chip}\\n\\n` : '';\nconst sourcesHeader = isRefusal && count > 0 ? 'Ближайшие документы (вне ответа):' : 'Источники:';\nconst sourcesSection = count > 0 ? `\\n\\n${summary}\\n\\n${sourcesHeader}\\n${sourcesBlock}` : `\\n\\n${summary}`;\nconst fullText = `${header}${answerHtml}${nextSteps}${sourcesSection}`;\n\nconst parts = splitIntoParts(fullText, TG_MAX);\nconst chatId = $node['Whitelist'].json.chat_id;\nconst replyToMessageId = $node['Whitelist'].json.user_message_id || null;\nconst requestLogId = $json.request_log_id || '';\nconst totalParts = parts.length;\n\nconst buildKeyboard = () => {\n  if (!requestLogId) return null;\n  const rows = [];\n  const followupRow = dedupedSources.slice(0, 2).map((s) => ({\n    text: `📎 ${truncate(s.section || s.file || 'подробнее', 32)}`,\n    callback_data: `followup:${s._originalIdx}:${requestLogId}`,\n  }));\n  if (followupRow.length) rows.push(followupRow);\n  rows.push([\n    { text: '👍 Полезно', callback_data: `feedback:good:${requestLogId}` },\n    { text: '👎 Неточно', callback_data: `feedback:bad:${requestLogId}` },\n  ]);\n  return { inline_keyboard: rows };\n};\n\nreturn parts.map((text, i) => {\n  const isLast = i === totalParts - 1;\n  return {\n    json: {\n      chat_id: chatId,\n      text: totalParts > 1 ? `${text}\\n\\n<i>часть ${i + 1}/${totalParts}</i>` : text,\n      request_log_id: requestLogId,\n      is_last: isLast,\n      part_index: i + 1,\n      part_total: totalParts,\n      inline_keyboard: isLast ? buildKeyboard() : null,\n      reply_to_message_id: i === 0 ? replyToMessageId : null,\n    },\n  };\n});\n"
+        "jsCode": "const TG_MAX = 4000;\n\nconst escapeHtml = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst mdToHtml = (s) => {\n  s = s.replace(/`([^`\\n]+)`/g, '<code>$1</code>');\n  s = s.replace(/\\*\\*([^*\\n]+?)\\*\\*/g, '<b>$1</b>');\n  s = s.replace(/^- /gm, '• ');\n  s = s.replace(/^\\* /gm, '• ');\n  return s;\n};\nconst balanceTags = (s) => {\n  ['b', 'code', 'i'].forEach(tag => {\n    const opens = (s.match(new RegExp(`<${tag}>`, 'g')) || []).length;\n    const closes = (s.match(new RegExp(`</${tag}>`, 'g')) || []).length;\n    if (opens > closes) s = s + `</${tag}>`.repeat(opens - closes);\n    if (closes > opens) s = `<${tag}>`.repeat(closes - opens) + s;\n  });\n  return s;\n};\n\nconst confidenceChip = (conf) => {\n  if (conf == null) return '';\n  if (conf >= 0.7) return '🟢 <b>Высокая уверенность</b>';\n  if (conf >= 0.4) return '🟡 <b>Средняя уверенность</b> — сверьтесь с источником';\n  if (conf > 0) return '🟠 <b>Низкая уверенность</b> — рассмотрите 🧑‍💼 эскалацию';\n  return '';\n};\n\nconst REFUSAL_PATTERNS = [\n  /данных недостаточно/i,\n  /не нашел? в (предоставленных |)источниках/i,\n  /не содерж[аи]т (информации|ответа)/i,\n  /отсутствует определение/i,\n  /в (корпусе|базе знаний) нет/i,\n  /не нашел подходящих/i,\n];\nconst looksRefusal = (s) => REFUSAL_PATTERNS.some(re => re.test(s));\n\nconst splitIntoParts = (full, max) => {\n  if (full.length <= max) return [full];\n  const parts = [];\n  const paragraphs = full.split('\\n\\n');\n  let current = '';\n  const flush = () => { if (current) { parts.push(current); current = ''; } };\n  for (const para of paragraphs) {\n    const candidate = current ? current + '\\n\\n' + para : para;\n    if (candidate.length <= max) { current = candidate; continue; }\n    flush();\n    if (para.length <= max) { current = para; continue; }\n    const sentences = para.split(/(?<=[.!?])\\s+/);\n    let sCur = '';\n    for (const s of sentences) {\n      const sCand = sCur ? sCur + ' ' + s : s;\n      if (sCand.length <= max) { sCur = sCand; continue; }\n      if (sCur) { parts.push(sCur); sCur = ''; }\n      if (s.length > max) {\n        for (let i = 0; i < s.length; i += max) parts.push(s.slice(i, i + max));\n      } else {\n        sCur = s;\n      }\n    }\n    if (sCur) parts.push(sCur);\n  }\n  flush();\n  return parts.map(balanceTags);\n};\n\nconst truncate = (s, max) => {\n  const str = String(s == null ? '' : s);\n  return str.length <= max ? str : str.slice(0, max - 1) + '…';\n};\n\nconst seenFiles = new Set();\nconst dedupedSources = [];\nconst originalSources = $json.sources || [];\noriginalSources.forEach((s, originalIdx) => {\n  const file = s.file || s.chunk_id || '';\n  if (file && seenFiles.has(file)) return;\n  seenFiles.add(file);\n  dedupedSources.push({ ...s, _originalIdx: originalIdx });\n});\nconst sourcesBlock = dedupedSources.map((s, i) => {\n  const file = escapeHtml(s.file || s.chunk_id || 'unknown');\n  const section = escapeHtml(s.section || 'раздел не указан');\n  return `${i + 1}. <code>${file}</code> — ${section}`;\n}).join('\\n');\n\nconst count = dedupedSources.length;\nconst pluralRu = (n) => {\n  const mod10 = n % 10;\n  const mod100 = n % 100;\n  if (mod10 === 1 && mod100 !== 11) return 'релевантный документ';\n  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'релевантных документа';\n  return 'релевантных документов';\n};\n\nconst rawAnswer = $json.answer || '';\nconst isRefusal = $json.refused === true || looksRefusal(rawAnswer);\nconst conf = $json.confidence;\nconst chip = isRefusal ? '' : confidenceChip(conf);\n\nconst answerHtml = mdToHtml(escapeHtml(rawAnswer));\nconst summary = count > 0 ? `Найдено ${count} ${pluralRu(count)}.` : 'По базе знаний не найдено подходящих документов.';\n\nconst nextSteps = isRefusal\n  ? '\\n\\n<b>Что делать дальше:</b>\\n• уточните вопрос конкретнее (термины, документ, дата)\\n• посмотрите покрытие — /docs\\n• для эскалации к HR/Legal — кнопка 🧑‍💼 ниже'\n  : '';\n\nconst header = chip ? `${chip}\\n\\n` : '';\nconst sourcesHeader = isRefusal && count > 0 ? 'Ближайшие документы (вне ответа):' : 'Источники:';\nconst sourcesSection = count > 0 ? `\\n\\n${summary}\\n\\n${sourcesHeader}\\n${sourcesBlock}` : `\\n\\n${summary}`;\nconst fullText = `${header}${answerHtml}${nextSteps}${sourcesSection}`;\n\nconst parts = splitIntoParts(fullText, TG_MAX);\nconst chatId = $node['Whitelist'].json.chat_id;\nconst replyToMessageId = $node['Whitelist'].json.user_message_id || null;\nconst requestLogId = $json.request_log_id || '';\nconst totalParts = parts.length;\n\nconst buildKeyboard = () => {\n  if (!requestLogId) return null;\n  const rows = [];\n  const followupRow = dedupedSources.slice(0, 2).map((s) => ({\n    text: `📎 ${truncate(s.section || s.file || 'подробнее', 32)}`,\n    callback_data: `followup:${s._originalIdx}:${requestLogId}`,\n  }));\n  if (followupRow.length) rows.push(followupRow);\n  // Sprint 6 #6 N2 Quick-actions: «🔁 Уточнить» (rerun с top_k=10) + «📖 Развернуть» (top-1 chunk full)\n  const hasSources = dedupedSources.length > 0;\n  const quickRow = [\n    { text: '🔁 Уточнить', callback_data: `clarify:${requestLogId}` },\n  ];\n  if (hasSources) {\n    quickRow.push({ text: '📖 Развернуть', callback_data: `expand:0:${requestLogId}` });\n  }\n  rows.push(quickRow);\n  rows.push([\n    { text: '👍 Полезно', callback_data: `feedback:good:${requestLogId}` },\n    { text: '👎 Неточно', callback_data: `feedback:bad:${requestLogId}` },\n  ]);\n  return { inline_keyboard: rows };\n};\n\nreturn parts.map((text, i) => {\n  const isLast = i === totalParts - 1;\n  return {\n    json: {\n      chat_id: chatId,\n      text: totalParts > 1 ? `${text}\\n\\n<i>часть ${i + 1}/${totalParts}</i>` : text,\n      request_log_id: requestLogId,\n      is_last: isLast,\n      part_index: i + 1,\n      part_total: totalParts,\n      inline_keyboard: isLast ? buildKeyboard() : null,\n      reply_to_message_id: i === 0 ? replyToMessageId : null,\n    },\n  };\n});\n"
       },
       "id": "format-answer",
       "name": "Format Answer",
@@ -628,6 +628,103 @@
       "position": [
         1000,
         -160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.event_type }}",
+              "rightValue": "clarify_request",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "clarify-if",
+      "name": "Clarify?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://rag-api:8000/clarify?request_log_id={{ $node['Whitelist'].json.request_log_id }}",
+        "options": {
+          "timeout": 60000
+        },
+        "sendBody": false
+      },
+      "id": "resolve-clarify",
+      "name": "Resolve Clarify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.event_type }}",
+              "rightValue": "expand_request",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "expand-if",
+      "name": "Expand?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=http://rag-api:8000/expand?request_log_id={{ $node['Whitelist'].json.request_log_id }}&idx={{ $node['Whitelist'].json.followup_idx }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "resolve-expand",
+      "name": "Resolve Expand",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        -100
       ]
     }
   ],
@@ -890,7 +987,7 @@
         ],
         [
           {
-            "node": "Direct Reply?",
+            "node": "Clarify?",
             "type": "main",
             "index": 0
           }
@@ -924,6 +1021,64 @@
         [
           {
             "node": "Format Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clarify?": {
+      "main": [
+        [
+          {
+            "node": "Resolve Clarify",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Expand?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Clarify": {
+      "main": [
+        [
+          {
+            "node": "Format Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand?": {
+      "main": [
+        [
+          {
+            "node": "Resolve Expand",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Direct Reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Expand": {
+      "main": [
+        [
+          {
+            "node": "Send Direct Reply",
             "type": "main",
             "index": 0
           }

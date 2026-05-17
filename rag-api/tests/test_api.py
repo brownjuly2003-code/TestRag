@@ -93,6 +93,13 @@ class FakeStore:
     def get_request_source(self, request_log_id, idx):
         return self.request_sources.get((request_log_id, idx))
 
+    def get_request_question(self, request_log_id):
+        # Sprint 6 #6 N2 Quick-actions: lookup для /clarify rerun
+        for entry in self.request_logs:
+            if entry.get("request_log_id") == request_log_id:
+                return entry.get("question")
+        return self.request_sources.get(("__question__", request_log_id))  # test backdoor
+
     # Override enqueue_review to capture context arg (N3)
     def enqueue_review(self, request_log_id=None, reason=None, context=None):
         self.review_queue.append({
@@ -535,6 +542,102 @@ def test_followup_requires_request_log_id():
         response = client.get("/followup", params={"idx": 0})
 
     assert response.status_code == 422
+
+
+# ---------- Sprint 6 #6 N2 Quick-actions: /clarify + /expand ----------
+
+
+def test_expand_returns_full_chunk_content(monkeypatch):
+    store = FakeStore()
+    store.request_sources[("rl-1", 0)] = {
+        "chunk_id": "templates:0",
+        "file": "document_templates.md",
+        "section": "Черновики кадровых документов",
+        "score": 0.92,
+    }
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/expand", params={"request_log_id": "rl-1", "idx": 0})
+
+    assert response.status_code == 200
+    body = response.json()
+    # full chunk content (не snippet) попадает в text
+    assert "ФИО работника" in body["text"]
+    assert body["chunk_id"] == "templates:0"
+    assert body["file"] == "document_templates.md"
+    assert body["section"] == "Черновики кадровых документов"
+    # HTML header для TG (parse_mode=HTML)
+    assert "<code>document_templates.md</code>" in body["text"]
+
+
+def test_expand_returns_404_when_chunk_id_unknown(monkeypatch):
+    store = FakeStore()
+    store.request_sources[("rl-1", 0)] = {
+        "chunk_id": "missing-chunk",
+        "file": "x.md",
+        "section": "X",
+        "score": 0.5,
+    }
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/expand", params={"request_log_id": "rl-1", "idx": 0})
+
+    assert response.status_code == 404
+
+
+def test_expand_returns_404_when_source_missing(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/expand", params={"request_log_id": "rl-x", "idx": 0})
+
+    assert response.status_code == 404
+
+
+def test_expand_rejects_negative_idx(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/expand", params={"request_log_id": "rl-1", "idx": -1})
+
+    assert response.status_code == 400
+
+
+def test_expand_requires_request_log_id():
+    with TestClient(app) as client:
+        response = client.get("/expand", params={"idx": 0})
+
+    assert response.status_code == 422
+
+
+def test_clarify_reruns_with_top_k_10(monkeypatch):
+    store = FakeStore()
+    # backdoor: get_request_question возвращает строку
+    store.request_sources[("__question__", "rl-1")] = "Что такое controlled zone?"
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.post("/clarify", params={"request_log_id": "rl-1"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["request_log_id"] == "request-1"
+    # /clarify создаёт НОВЫЙ request_log → log_request вызван
+    assert len(store.request_logs) == 1
+
+
+def test_clarify_returns_404_when_request_log_unknown(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.post("/clarify", params={"request_log_id": "rl-missing"})
+
+    assert response.status_code == 404
 
 
 def test_document_type_detection_returns_missing_fields(monkeypatch):
