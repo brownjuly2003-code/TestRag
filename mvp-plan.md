@@ -2,94 +2,133 @@
 
 ## Goal
 
-Собрать рабочий MVP HR/legal RAG-ассистента: Telegram-вопрос, n8n workflow, hybrid search по Postgres/pgvector + BM25, ответ через Mistral с источниками, логирование и оценка качества.
+Собрать рабочий MVP HR/legal RAG-ассистента для авиагрузовой компании: Telegram-вопрос, n8n workflow, hybrid search по Postgres/pgvector + BM25, ответ через Mistral с источниками, логирование, оценка качества, drill-down feedback с категорией.
 
 ## Current Status
 
-Updated: 2026-05-17.
+Updated: 2026-05-17 (HEAD `909bd42` после Sprint 1+2).
 
-- [x] Docker Compose поднят: `postgres`, `rag-api`, `n8n`.
-- [x] n8n workflow активирован, публичный webhook отвечает без ошибок.
-- [x] n8n routing bug исправлен: whitelist true больше не ведет в `Send Denied`, обычные вопросы ведут в `Ask RAG API`, feedback ведет в `Send Feedback`.
-- [x] Локальный Telegram whitelist настроен для `432751211`.
-- [x] RAG API работает с Postgres/pgvector и Mistral: `/health` возвращает `postgres_enabled=true`, `mistral_enabled=true`, `embeddings_enabled=true`, `chunk_count=122`.
-- [x] В Postgres есть рабочие данные: `documents=42`, `document_chunks=122`; `request_logs`, `answer_feedback` и `review_queue` заполняются.
-- [x] Тесты API проходят: `python -m pytest -p no:schemathesis` -> `15 passed`.
+- [x] Docker Compose поднят: `postgres`, `rag-api`, `n8n`, `cloudflared`.
+- [x] n8n workflow активирован, публичный webhook через cloudflare tunnel (trycloudflare).
+- [x] Локальный Telegram whitelist для `432751211`.
+- [x] RAG API: `chunk_count=207`, `documents=48`, postgres/mistral/embeddings enabled.
+- [x] Postgres tables: documents, document_chunks, request_logs, answer_feedback (+category +free_text +chunk_ids после M7), review_queue.
+- [x] **pytest 68/68** (`python -m pytest -p no:schemathesis`).
+- [x] Workflow 24 узла активный (TelegramTrigger → Whitelist → Authorized? → Feedback? → Bad Clarify? → Direct Reply? → History? → Docs? → Send Typing → Ask RAG API → Format Answer → Last Part? → Send Answer / Send Answer Part).
+- [x] Aviation profile pass на 200 corpus-файлов. MVP-44 подборка ingested.
+- [x] Live TG smoke: controlled-zone Q ответил с HTML, 2 кнопки, drill-down работает.
+- [x] Split до 4000 chars подтверждён через `.tmp/smoke_split.py`: 2 parts (3895+674) в реальный чат, keyboard только на last.
 
-## Tasks
+## Sprint 1 — must-have UX polish ✅ DONE (2026-05-17)
 
-- [x] Создать стартовый каркас проекта: Docker Compose для n8n, Postgres/pgvector, RAG API. Verify: `docker compose config --quiet`.
-- [x] Подготовить 3 демо-документа для локального корпуса. Verify: RAG API видит sample chunks через `/health`.
-- [x] Подключить ingestion в Postgres: `TokenTextSplitter(chunk_size=500, chunk_overlap=50)`, Mistral embeddings, запись в `document_chunks`. Verify: в базе появились чанки с метаданными и embeddings.
-- [x] Реализовать начальный hybrid retrieval endpoint для RAG API. Verify: unit-тест возвращает top-k chunks с BM25 score и итоговым score.
-- [x] Добавить классификацию запроса и порог confidence. Verify: слабый запрос получает отказ, релевантный запрос проходит дальше.
-- [x] Добавить ответ через Mistral с fallback на grounded extractive answer. Verify: каждый ответ содержит минимум один источник или отказ.
-- [x] Добавить генерацию черновика по 1 шаблону через кодовое заполнение полей. Verify: на тестовых данных создается черновик без свободной генерации финального документа.
-- [x] Собрать стартовый n8n workflow: Telegram, whitelist, вызов RAG API, кнопки оценки. Verify: workflow JSON парсится.
-- [x] Добавить запись логов, оценок и очереди ревью в Postgres из API/n8n. Verify: плохая оценка появляется в `review_queue`.
-- [x] Phase 10: Verification. Прогнать демо-сценарии HR, legal, low-confidence и template draft. Verify: результаты совпадают с MVP-критериями.
+Закрыто за день. Все 6 пунктов в `docs/research/SYNTHESIS.md` `Sprint 1 must-have`:
 
-## Next Tasks
+- [x] Заменить «Good/Bad» лейблы на «👍 Полезно / 👎 Неточно». Удалить кнопку «📋 Нужны источники» (anti-pattern).
+- [x] `sendChatAction('typing')` через HTTP-узел Bot API перед Ask RAG API.
+- [x] `parse_mode='HTML'` на Send Answer/Direct Reply/Feedback Ack/Denied. Format Answer переписан с HTML-escape + filenames в `<code>`.
+- [x] **MD→HTML конверсия** в Format Answer (`**X**`→`<b>X</b>`, `` `X` ``→`<code>X</code>`, `- ` → `• `) — фикс после первого TG-смока, см. `docs/known-issues.md` issue 3.
+- [x] Убрать «Confidence: N» → «Найдено N релевантных документ(а/ов)» с русским склонением.
+- [x] Drill-down на 👎: `feedback:bad:` → `feedback_bad_clarify` → новый узел Edit Reply Markup (HTTP) подменяет клавиатуру исходного сообщения на 3 reason-кнопки. Reason-клик пишет `category` в `answer_feedback`.
 
-- [ ] Проверить live Telegram happy path после настройки whitelist. Verify: сообщение от `432751211` проходит n8n, вызывает `/ask` и возвращает ответ в Telegram.
-- [ ] Проверить live feedback path из Telegram-кнопок. Verify: `answer_feedback` увеличивается, bad feedback добавляет запись в `review_queue`.
-- [x] Исправить n8n IF-ветки после симптома "бот отвечает только n8n attribution". Verify: active workflow в БД показывает `Authorized? true -> Feedback?`, `Authorized? false -> Send Denied`, `Feedback? true -> Send Feedback`, `Feedback? false -> Ask RAG API`; n8n пересоздан.
-- [x] Отобрать MVP-корпус из `corpus/`. Verify: список файлов зафиксирован в `manifests/MVP_CORPUS_FILES.txt`, лишние документы не индексируются при включенном manifest.
-- [x] Включить выбранный корпус в локальном `.env`: `DOCS_PATH=/app/corpus`, `DOCS_MANIFEST_PATH=/app/manifests/MVP_CORPUS_FILES.txt`, затем пересоздать `rag-api`. Verify: `/health` показывает `chunk_count=122`, а `document_chunks` содержит расширенный корпус с метаданными.
-- [ ] Прогнать demo runbook end-to-end. Verify: HR-вопрос, legal-вопрос, low-confidence refusal и document draft проходят по ожидаемому сценарию.
-- [x] Синхронизировать документацию по терминам `Postgres/pgvector` и `Supabase`. Verify: README и runbook одинаково описывают локальный MVP и возможный production target.
-- [x] Aviation profile pass: перепрофилировать 200 corpus-файлов под авиагрузовую компанию + расширить MVP подборку до 44. Verify: aviation coverage 100%, golden Q 10/10 PASSED через /ask, top-source 01_hr_pol_safety.md для controlled zone Q.
-- [x] TG E2E smoke: «привет» direct-reply OK, aviation Q «controlled zone» полный RAG-путь OK через @AIagentJu_bot.
-- [x] Запросить research у Kimi и Codex по best practices RAG bot UX (HR/legal). Verify: оба независимых прохода сохранены в `docs/research/`, синтез в `docs/research/SYNTHESIS.md`.
+**Hotfixes Sprint 1**:
+- [x] Ask RAG API брал `text/user_id` из `$json` (Send Typing HTTP затирал) → переписан на `$node['Whitelist'].json.*` + regression test. См. `docs/known-issues.md` issue 4.
 
-## Bot UX Roadmap (по research-синтезу 2026-05-17)
+## Sprint 2 — UX uplift ✅ DONE (2026-05-17)
 
-Полная приоритизация и обоснование в `docs/research/SYNTHESIS.md`. Sprint-планы ниже — выдержка.
+Из `docs/research/SYNTHESIS.md` Sprint 2 nice-to-have. Закрыто 4 из 5, N1 отложен в Sprint 3.
 
-### Sprint 1 — must-have polish (0.5–1 день)
+- [x] Команды `/help` (HTML список), `/clear` (про stateless), `/history` (последние 5 из request_logs с русским склонением), `/docs` (8 категорий, 48 docs).
+- [x] M7 schema: `answer_feedback` +`category` text, +`free_text` text nullable, +`chunk_ids` jsonb (auto-pulled из `request_logs.sources` по `request_log_id`). Миграция ALTER TABLE применена.
+- [x] N5 endpoint `GET /docs/summary`: группирует documents по prefix file_name (01_hr_pol/02_hr_tpl/03_legal_con/04_legal_cla/05_tlog/06_comp/07_faq/other) с подсчётом docs.
+- [ ] **N1 Follow-up question buttons** — DEFERRED to Sprint 3 (см. ниже).
+- [x] **TG 4096 char split** (вне SYNTHESIS, но критично): Format Answer split по `\n\n` paragraph / предложению / hard chunk. `balanceTags()` дозакрывает разорванные `<b>/<code>`. Workflow `Last Part? If` → `Send Answer` (keyboard) / `Send Answer Part` (без keyboard). См. `docs/known-issues.md` issues 5+6.
 
-- [x] Заменить «Good/Bad» лейблы на «👍 Полезно / 👎 Неточно / 📋 Нужны источники» + перенести `replyMarkup` из `additionalFields` в top-level params (n8n v1.2 schema). 2026-05-17.
-- [x] **Удалить кнопку «📋 Нужны источники»** (анти-паттерн по обоим research-проходам: sources должны быть всегда inline). Оставить 2 кнопки. 2026-05-17.
-- [x] Добавить `sendChatAction('typing')` в n8n workflow перед `Ask RAG API` (HTTP-узел через Bot API). 2026-05-17.
-- [x] Перейти на `parse_mode='HTML'` в Send Answer/Direct Reply/Feedback Ack/Denied; Format Answer переписан с HTML-escape, filenames в `<code>`. 2026-05-17.
-- [x] Убрать вывод «Confidence: N» в UI. Заменить на «Найдено N релевантных документ(а/ов)» с русским склонением. 2026-05-17.
-- [x] При 👎 → `event_type=feedback_bad_clarify` + `Edit Reply Markup` HTTP-узел подменяет клавиатуру на 3 reason-кнопки (Неточно/Устарело/Нужен человек). Reason-клик пишет `comment=category:<reason>` в `answer_feedback`. 2026-05-17.
+## Sprint 3 — production polish (NEXT — 1-2 дня)
 
-### Sprint 2 — UX uplift (1–2 дня)
+### N1 Follow-up question buttons (priority 1)
 
-- [x] Команды `/help`, `/clear`, `/history` (последние 5 запросов юзера из `request_logs`). 2026-05-17.
-- [x] Расширить `answer_feedback`: добавить `chunk_ids` (jsonb, auto-pulled из request_logs.sources), `category` (text для inaccurate/outdated/human), `free_text` (text nullable). Миграция ALTER TABLE без потери данных. 2026-05-17.
-- [ ] Follow-up question buttons: 2 вопроса на основе top-3 chunks (template-based или короткий Mistral-вызов).
-- [x] `/docs` — список 7 категорий из MVP-корпуса (по prefix file_name, total 48 docs ingested). Endpoint `GET /docs/summary`. 2026-05-17.
+Цель: после ответа на вопрос юзер видит 2 кнопки «уточняющий вопрос», клик отправляет новый Q в RAG API.
 
-### Sprint 3 — production polish (1–2 дня)
+План (детально в `docs/next-session.md`):
+- **rag-api**: новый endpoint `GET /followup?request_log_id=X&idx=Y` → возвращает crafted question из `request_logs.sources[Y].section` или `.file`.
+- **storage**: `get_request_source(rl_id, idx) -> dict | None`.
+- **Whitelist**: parse `callback_data='followup:<idx>:<rl_uuid>'` (47 байт, fits в TG 64-byte лимит) → `event_type='followup_request'`.
+- **Workflow**: новый `Followup? If` после `Docs? false` → `Resolve Follow-up` HTTP-узел (GET /followup) → `Set Question` Code-узел трансформирует `{question: "..."}` в shape, ожидаемый Send Typing/Ask RAG → продолжает по существующему RAG-пути.
+- **Send Answer refactor**: с Telegram-node на HTTP-node (POST sendMessage), чтобы inline_keyboard был dynamic — добавить 2 follow-up кнопок на основе `sources[0..1].section` + 2 feedback кнопок.
+- **Format Answer**: на последнем item добавить `follow_ups: [{label, callback}]` array.
+- **Тесты**: parse followup callback, /followup endpoint, workflow routing, dynamic inline keyboard.
 
-- [ ] Human handover: «🧑‍💼 Связать с HR/Legal» при низкой conf или категории «нужен человек» → запись в `review_queue` с последними 5 сообщениями.
-- [ ] Conversation threading: хранить `thread_id` в n8n, на reply-to-message подмешивать prev 3 QA в retrieval query.
-- [ ] Quick-actions «Уточнить» (rerun с extended top_k) и «Развернуть» (full chunk вместо snippet).
+Сложность: ~6-8 новых узлов в workflow, ~30 LOC в storage+main, ~5-7 новых тестов.
 
-### Anti-patterns (явно НЕ делаем)
+### N3 Human handover (priority 2)
 
-- ❌ Confidence как сырое % в UI
-- ❌ MarkdownV2 в динамическом контенте (HTML стабильнее для legal цитат)
-- ❌ Длинный disclaimer ДО ответа
-- ❌ Sources только по кнопке
-- ❌ Voice/audio messages; multi-language switch; RAGAs eval dashboard
+Цель: при `feedback:bad_human` → запись в review_queue с last 5 сообщений + confirmation user'у.
+
+- [x] `feedback:bad_human` уже пишет `category='human'` в answer_feedback (через Sprint 1 drill-down).
+- [ ] Добавить column `review_queue.context` jsonb для last 5 messages.
+- [ ] Endpoint `/feedback` при `category='human'` дополнительно подтягивает `recent_requests(telegram_user_id, limit=5)` и пишет в `review_queue.context`.
+- [ ] Workflow Format Feedback при `category='human'` отправляет «Ваш запрос направлен HR/Legal на ручную обработку, ответят в течение N рабочих дней».
+
+### N4 Conversation threading (priority 3)
+
+Цель: reply-to-message подмешивает prev 3 QA в retrieval query.
+
+- [ ] Whitelist: detect `$json.callback_query.message.reply_to_message` / `$json.message.reply_to_message`.
+- [ ] При наличии reply_to: extract `thread_id` (parent message_id) + lookup prev requests via `get_thread_history(thread_id)`.
+- [ ] /ask: accept optional `prev_context: list[str]` параметр → prepend в retrieval query.
+- [ ] DB: новая таблица `message_threads(message_id, request_log_id, parent_message_id)`.
+
+### N2 Quick-actions (priority 4)
+
+- [ ] «Уточнить» — rerun с top_k=10 (вместо 5).
+- [ ] «Развернуть» — full chunk content вместо snippet.
+
+### Sprint 4 — retrieval polish (low-priority но необходим для production)
+
+- [ ] **Retrieval polluted** (см. `docs/known-issues.md` issue 1 + `docs/findings/2026-05-17-retrieval-aviation-pollution.md`): controlled-zone Q даёт top=HR-шаблоны. Aviation pass раскидал aviation-tokens по всем файлам. Fix: re-profile aviation pass только для tlog/safety/comp файлов.
+
+## Anti-patterns (явно НЕ делаем)
+
+- ❌ Confidence как сырое `0.73` в UI (заменили на «Найдено N»).
+- ❌ MarkdownV2 в динамическом контенте (HTML стабильнее, escape-friendly).
+- ❌ Длинный disclaimer ДО ответа (одна строка после — OK).
+- ❌ Sources только по кнопке (всегда inline).
+- ❌ Truncate длинного ответа (вместо split с пометкой «часть N/M»).
+- ❌ Voice/audio messages; multi-language switch; RAGAs eval dashboard.
 
 ## Done When
 
-- [ ] Telegram-бот отвечает только whitelist-пользователям в live-чате.
+- [x] Telegram-бот отвечает только whitelist-пользователям.
 - [x] Ответы по нормативным вопросам всегда содержат источники.
 - [x] Низкая уверенность приводит к отказу, а не к выдуманному ответу.
 - [x] Все запросы и оценки логируются.
 - [x] Плохие ответы попадают в очередь ревью.
-- [ ] MVP можно показать без покупки n8n Cloud по `docs/demo-runbook.md`.
+- [x] Feedback drill-down: 👎 → 3 категории → answer_feedback.category.
+- [x] HTML рендер ответа без `**markdown**`-артефактов.
+- [x] Длинные ответы > 4096 chars не теряются (split на части).
+- [x] Команды /help, /history, /docs работают.
+- [ ] N1 Follow-up question buttons (Sprint 3).
+- [ ] N3 Human handover с context (Sprint 3).
+- [ ] Retrieval polish: top-source соответствует домену вопроса (Sprint 4).
+- [ ] MVP можно показать без покупки n8n Cloud по `docs/demo-runbook.md` (зависит от cloudflare named tunnel или paid n8n).
+
+## Known Issues
+
+Полный список в `docs/known-issues.md`. Главные:
+
+| # | issue | severity | fix |
+|---|---|---|---|
+| 1 | Retrieval polluted после aviation pass | high (prod) / low (demo) | Sprint 4 |
+| 2 | TG webhook secret in-memory | low (только тестирование) | n/a (n8n upstream) |
+| 7 | Mistral free tier 429 | medium (prod) | paid tier для prod |
+| 10 | Cloudflare tunnel эфемерные URLs | medium (demo) | named tunnel или real domain |
 
 ## Notes
 
-- n8n используется как оркестратор, RAG-логика остается в коде.
-- Retrieval делается гибридным: vector search + BM25.
-- LLM и embeddings: Mistral.
-- Для тестового достаточно self-hosted n8n.
-- Интеграция с платными правовыми системами остается за рамками MVP.
-- Перед demo-ready статусом нужен реальный Telegram-прогон после n8n routing fix, потому что локальные проверки подтверждают workflow/env/webhook/API, но не заменяют сообщение из клиента Telegram.
+- n8n используется как оркестратор, RAG-логика остается в коде (rag-api/app).
+- Retrieval гибридный: pgvector + BM25, оба BM25 и vector scores combined с весами в HybridRetriever.
+- LLM и embeddings: Mistral. Free tier хватает для demo, для prod нужен paid tier (issue 7).
+- Workflow 24 узла, активно `executionOrder=v1`.
+- TG callback_data 64-byte лимит влияет на N1 design (см. Sprint 3).
+- После любого изменения rag-api Python: `docker compose build rag-api && docker compose up -d --force-recreate rag-api` (см. issue 9).
+- После изменения workflow JSON: re-import через CLI с `MSYS_NO_PATHCONV=1` (issue 8).
