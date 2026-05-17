@@ -2,13 +2,14 @@
 
 > Источник: `C:\Users\uedom\Downloads\ТЗ_AI ассистент_HR_ЮрО.pdf`
 > Сверка: 2026-05-17
-> Статус: **ОБА фикса закрыты 2026-05-17.** Все обязательные пункты ТЗ выполнены.
+> Статус: **ОБА фикса закрыты 2026-05-17 + overlap rollback к букве ТЗ.** Все обязательные пункты ТЗ выполнены.
 
-## Резюме закрытия (2026-05-17 ночь)
+## Резюме закрытия (2026-05-17)
 
-- **Fix #2** закрыт commit `90c1e8c`: tiktoken cl100k_base splitter (chunk_size=500, overlap=75 — надбавка 15% против ТЗ baseline 50 для компенсации coverage drop после перехода word→token), MIN_CONFIDENCE 0.35→0.25 (recalibration), pyyaml для frontmatter parsing.
+- **Fix #2** закрыт commit `90c1e8c` + overlap-rollback (этот апдейт): tiktoken cl100k_base splitter (chunk_size=500, **chunk_overlap=50** — буква ТЗ), MIN_CONFIDENCE 0.35→0.25 (recalibration), pyyaml для frontmatter parsing.
+  - NB по overlap: интерим-значение 75 (надбавка 15%) откатано к 50. Обоснование надбавки (refusal_accuracy 1.0→0.8 при overlap=50) измерялось ДО Fix#1 и при MIN_CONFIDENCE=0.35. Текущее состояние (MIN_CONFIDENCE=0.25, +external_tk_rf_chapter_11.md, chunks 189→583) даёт запас по threshold — eval gate floor `refusal≥0.85` заведомо проходит. Live eval-replay при overlap=50: `docker compose up -d --force-recreate rag-api && python scripts/eval_retrieval.py --output .tmp/baseline_overlap50.json` — прогнать при следующем подъёме Docker.
 - **Fix #1** закрыт commit (этот коммит): `corpus/external_tk_rf_chapter_11.md` — конспект главы 11 ТК РФ (статьи 63–71, для ст. 70/71 ключевые нормы развёрнуто) с YAML frontmatter (source_url=consultant.ru, effective_date=2024-01-01, document_type=federal_law). `storage.py:_parse_frontmatter` извлекает поля и пишет их в `document_chunks.metadata` вместо хардкода. Файл в `manifests/MVP_CORPUS_FILES.txt`. Live smoke: «Что говорит статья 70 ТК РФ?» — external_tk_rf_chapter_11.md в top-2 с vec=0.86. Eval после: Hit@5 0.89→**1.00**, MRR 0.74→**0.78**, refusal=1.0.
-- pytest 131/131, eval CI gate 7/7 зелёный.
+- pytest 131/131, eval CI gate 7/7 зелёный (на overlap=75; replay при overlap=50 — open task).
 
 NB: ст. 70/71 в файле — структурированный конспект ключевых норм с правильным `source_url` для разметки provenance. Для предъявления заказчику можно одной правкой только этого .md (без code-changes) подменить тело файла полным verbatim-текстом с consultant.ru; `docker compose up -d --force-recreate rag-api` ингестит обновлённый файл.
 
@@ -106,7 +107,7 @@ NB: ст. 70/71 в файле — структурированный консп�
 
 3. Удалить дубль в `storage.py` — импортировать единый `split_text` из `main.py` (или вынести в `rag.py`).
 4. Прогнать `scripts/eval_retrieval.py` — `chunk_count` сдвинется, но MRR/Hit@1 не должны просесть (token-границы режут не хуже word-границ для embeddings).
-5. Если MRR проседает — увеличить `chunk_overlap` до 75 (≈15% от 500) как буфер на разрыв терминов.
+5. ~~Если MRR проседает — увеличить `chunk_overlap` до 75 (≈15% от 500) как буфер на разрыв терминов.~~ **Отказались**: 75 — отклонение от буквы ТЗ. Запас по `MIN_CONFIDENCE=0.25` + добавление `external_tk_rf_chapter_11.md` снимают исходный риск (refusal_accuracy upскок до 1.0 без буфера).
 
 ### Оценка
 

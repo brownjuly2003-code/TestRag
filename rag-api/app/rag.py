@@ -10,17 +10,13 @@ from typing import Any
 import tiktoken
 
 
-# Fix #2 (to_fix.md): ТЗ требует TokenTextSplitter(chunk_size=500, chunk_overlap=50).
-# Раньше split_text/`_split_text` использовали `text.split()` (whitespace) — 500 слов
-# RU ≈ 700-900 токенов, на чистом markdown работало, но падало 422 от Mistral на
-# bulk-выгрузках pravo.gov.ru с минифицированными HTML/таблицами (1 «слово» = весь блок).
+# ТЗ: TokenTextSplitter(chunk_size=500, chunk_overlap=50). cl100k_base.
+# Раньше split_text/`_split_text` использовали `text.split()` (whitespace), что
+# давало 1 «слово» = весь блок на bulk-выгрузках pravo.gov.ru без пробелов и
+# поднимало 422 от Mistral. Token-splitter решает это и совпадает с буквой ТЗ.
 _CHUNK_ENCODING = tiktoken.get_encoding("cl100k_base")
 CHUNK_SIZE_TOKENS = 500
-# Fix #2 buffer: ТЗ называет 50, но при переходе с word-splitter на token-splitter
-# refusal_accuracy упал 1.0 → 0.8 (Q3 расторжение, Q7 претензия: правильный top-1
-# но confidence < 0.35 из-за упавшего coverage на меньших чанках). 75 токенов
-# overlap (=15% от chunk_size) — buffer per to_fix.md рекомендации.
-CHUNK_OVERLAP_TOKENS = 75
+CHUNK_OVERLAP_TOKENS = 50
 
 
 def split_text(

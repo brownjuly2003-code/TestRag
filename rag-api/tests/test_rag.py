@@ -209,15 +209,9 @@ def test_split_text_overlap_creates_intersection():
 
 
 def test_split_text_defaults_match_tz_spec():
-    """ТЗ: TokenTextSplitter(chunk_size=500, chunk_overlap=50).
-
-    chunk_overlap=75 — наша надбавка (15% от 500): после перехода
-    word→token splitter Q3/Q7 (расторжение / претензия) теряли confidence
-    ниже 0.35 при overlap=50. 75 восстанавливает refusal_accuracy=1.0.
-    Документировано в to_fix.md Fix #2 шаг 5.
-    """
+    """ТЗ: TokenTextSplitter(chunk_size=500, chunk_overlap=50)."""
     assert CHUNK_SIZE_TOKENS == 500
-    assert CHUNK_OVERLAP_TOKENS in {50, 75}
+    assert CHUNK_OVERLAP_TOKENS == 50
 
 
 def test_vector_only_fallback_when_query_tokens_empty():
