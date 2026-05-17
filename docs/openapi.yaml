@@ -332,6 +332,12 @@ components:
           type: boolean
           title: Debug
           default: false
+        prev_qa_count:
+          type: integer
+          maximum: 5.0
+          minimum: 0.0
+          title: Prev Qa Count
+          default: 0
       type: object
       required:
       - question

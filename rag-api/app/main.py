@@ -25,6 +25,7 @@ from .rag import (
 from .settings import get_settings
 from .storage import PostgresStore
 from . import tg_copy
+from .multiturn import augment_retrieval_query, filter_relevant_prev_qas
 from .tg_classifier import classify as classify_tg_update
 from .tg_classifier import parse_allowed_ids
 
@@ -62,6 +63,8 @@ class AskRequest(BaseModel):
     telegram_user_id: str | None = None
     top_k: int = Field(default=5, ge=1, le=10)
     debug: bool = False
+    # Sprint 6 #7: Prev-N-QA augmentation (off by default; opt-in для multi-turn).
+    prev_qa_count: int = Field(default=0, ge=0, le=5)
 
 
 class Source(BaseModel):
@@ -800,8 +803,21 @@ def health() -> dict[str, Any]:
 async def ask(request: AskRequest) -> AskResponse:
     runtime = get_runtime()
     t0 = time.perf_counter()
-    query_embedding = await runtime.embeddings.embed_query(request.question)
-    results = runtime.retriever.search(request.question, top_k=request.top_k, query_embedding=query_embedding)
+    # Sprint 6 #7: Prev-N-QA augmentation. LLM prompt остаётся на current question
+    # (см. ниже), augmented строка идёт ТОЛЬКО в retrieval (embedding + BM25).
+    retrieval_query = request.question
+    if request.prev_qa_count > 0 and request.telegram_user_id:
+        recent = runtime.store.recent_requests(
+            telegram_user_id=request.telegram_user_id, limit=request.prev_qa_count + 1
+        )
+        # Первый элемент — текущий же запрос (если уже залогирован), пропускаем
+        prev = [r for r in recent if r.get("question") != request.question]
+        prev = filter_relevant_prev_qas(prev, skip_refused=True)
+        retrieval_query = augment_retrieval_query(
+            request.question, prev, max_prev=request.prev_qa_count
+        )
+    query_embedding = await runtime.embeddings.embed_query(retrieval_query)
+    results = runtime.retriever.search(retrieval_query, top_k=request.top_k, query_embedding=query_embedding)
     confidence = confidence_from_results(results)
     sources = to_sources(results)
     request_type = classify_request(request.question)
