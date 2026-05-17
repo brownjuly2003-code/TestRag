@@ -12,23 +12,16 @@
 
 Дополнительно Sprint 5 (`74f45fd`) расширил MVP-44 → MVP-47 (+aviation FAQ) и добавил глоссарий controlled zone / AWB / ULD / GHA / cutoff / DG в три ключевых файла. Финал: MRR 0.76, Hit@1 0.67, refusal accuracy 1.00.
 
-## 2. TG webhook secret in-memory — синтетический POST невозможен
+## 2. ~~TG webhook secret in-memory — синтетический POST невозможен~~ ✅ RESOLVED Sprint 7 (polling-mode)
 
-**Симптом**: `curl -X POST <N8N_WEBHOOK_URL>/webhook/...telegramtrigger/webhook -d '{...}'` → `403 {"message":"Provided secret is not valid"}`.
+**Был**: `curl -X POST <N8N_WEBHOOK_URL>/webhook/...telegramtrigger/webhook -d '{...}'` → `403 {"message":"Provided secret is not valid"}` из-за random secret_token, который n8n TelegramTrigger v1.3 генерил при активации workflow и хранил in-memory.
 
-**Root cause**: n8n TelegramTrigger v1.3 генерит random secret_token при активации workflow, хранит in-memory (staticData=NULL в БД, webhook_entity.webhookId='' пустой). Передаёт в TG через `setWebhook(...secret_token=X)`. TG потом шлёт `X-Telegram-Bot-Api-Secret-Token: X` header — n8n валидирует.
-
-**Status**: KNOWN, ограничивает автономное E2E тестирование.
-
-**Workaround**:
-1. Live TG smoke через @AIagentJu_bot (юзер вручную).
-2. Bot API direct `sendMessage` — отправлять сформированный split-output в чат через Bot API без прохождения через webhook (см. `.tmp/smoke_split.py`).
-3. pytest 68/68 покрывают workflow логику unit-level (Whitelist routing, Format Answer split, balance tags, parse_mode).
-
-**Fix candidates** (без upstream-патча в n8n):
-- Найти секрет в n8n process memory (грязный hack)
-- Re-call TG `setWebhook(secret_token=KNOWN)` — но n8n всё равно валидирует против своего internal значения
-- Patch TelegramTrigger node в форке n8n — overkill для MVP
+**Resolved Sprint 7**: TelegramTrigger node заменён на регулярный Webhook node (POST `/webhook/tg-poll`, без secret). Bot API webhook удалён (`deleteWebhook` при старте `tg-poll-bridge`). Поставка Telegram updates идёт через polling-bridge (`services/tg_poll_bridge/`) во внутренний n8n endpoint. Синтетический POST стал тривиальным:
+```bash
+curl -X POST http://localhost:5678/webhook/tg-poll -H 'Content-Type: application/json' \
+  -d '{"update_id":1,"message":{...}}'
+```
+Это разблокирует автономное E2E тестирование без Telethon-ник.
 
 ## 3. Mistral возвращает Markdown V1 при parse_mode=HTML
 
@@ -111,13 +104,15 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 
 **Fix candidate** (DX improvement): добавить volume `- ./rag-api/app:/app/app:ro` в docker-compose, тогда uvicorn --reload подхватит изменения сразу. Trade-off — нужно `--reload` flag, что не подходит для prod-like setup.
 
-## 10. Cloudflare tunnel — эфемерные URLs
+## 10. ~~Cloudflare tunnel — эфемерные URLs~~ ✅ RESOLVED Sprint 7 (polling-mode)
 
-**Симптом**: `docker compose down` + `docker compose up` → trycloudflare URL изменился → TG webhook указывает на dead URL → бот не отвечает.
+**Был**: `docker compose down` + `docker compose up` → trycloudflare URL изменился → TG webhook на dead URL → бот молчит.
 
-**Status**: KNOWN. Процедура восстановления в `docs/demo-runbook.md` раздел «Локальный Telegram Webhook» (6 шагов: rm контейнера → новый run → grep URL → заменить `N8N_WEBHOOK_URL` в .env → recreate n8n → verify TG `getWebhookInfo`).
+**Resolved Sprint 7**: убран весь внешний-tunnel путь. `services/tg_poll_bridge/` (docker container, ~150 lines stdlib-only Python) long-poll'ит `https://api.telegram.org/bot<TOKEN>/getUpdates` и POST'ит каждый update в `http://n8n:5678/webhook/tg-poll` (internal docker network). Никаких публичных URLs у n8n, никаких cloudflare/ngrok/named-tunnel'ов. Запуск: `docker compose up -d tg-poll-bridge`. Состояние persistent через restart (n8n offset не нужно хранить — Telegram отдаёт «непрочитанные» updates пока bridge не пометит их прочтёнными через offset).
 
-**Fix candidate**: купить cloudflare named tunnel ($0 для personal use, но требует регистрации домена) — стабильный URL. Или namesilo dns + custom tunnel. Out of MVP scope.
+**Trade-off**: ~5s polling latency vs мгновенный webhook. Для MVP HR/legal demo приемлемо.
+
+**Fallback (если когда-то нужен публичный URL)**: cloudflared/ngrok scripts в `docs/demo-runbook.md` остались, но более не required. Cloudflare named tunnel требует payment method ([[reference-tunnel-services-no-card]]) — не использовать.
 
 ## 11. Workflow .ready vs editing races (CX-related)
 
@@ -162,7 +157,7 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 | issue | блокирует demo? | блокирует prod? |
 |---|---|---|
 | 1 retrieval polluted | RESOLVED Sprint 4 | RESOLVED |
-| 2 webhook secret in-memory | нет (юзер тестит вручную) | нет |
+| 2 webhook secret in-memory | ✅ RESOLVED Sprint 7 (polling-mode) | RESOLVED |
 | 3 MD→HTML | FIXED | FIXED |
 | 4 $json shadowing | FIXED | FIXED |
 | 5 4096 limit | FIXED | FIXED |
@@ -170,7 +165,7 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 | 7 Mistral 429 | нет (graceful degrade) | да (paid tier needed) |
 | 8 path mangling | нет | нет (CI Linux) |
 | 9 rebuild requirement | нет | нет |
-| 10 ephemeral tunnel | да (требует пересоздания при рестарте) | да (named tunnel или real domain) |
+| 10 ephemeral tunnel | ✅ RESOLVED Sprint 7 (polling-mode bridge) | RESOLVED |
 | 11 N/A | — | — |
 | 12 n8n login | нет | нет (используем CLI/SQL) |
 | 13 intermittent latency | нет | мониторить |
@@ -181,7 +176,7 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 | 18 Sprint 6 #1 partial — HTTP nodes ещё на $env | да (BLOCK_ENV=false override) | да (workflow refactor на credentials) |
 | 19 MIN_CONFIDENCE override drift в .env | да (вернуть к 0.25) | да (.env validate gate) |
 
-Демо-готовность: 🟢 retrieval polished (MRR=0.78 на overlap=75 + MIN_CONFIDENCE=0.25), refusal=1.0, content gaps закрыты. Sprint 6 #1/#6/#7 закрыты в session 2026-05-17 (n8n extract, N2 Quick-actions, Prev-N-QA infrastructure). Live TG E2E подтверждён 2026-05-17 EOD (5/6 N1+N2+N3+N4). Ephemeral tunnel (issue 10) — единственный blocker для долгой демо-сессии. Production-readiness — Mistral paid tier (issue 7) + named cloudflare tunnel + HTTPS + Sprint 6 #1 finish (issue 18).
+Демо-готовность: 🟢 retrieval polished (MRR=0.78 на overlap=75 + MIN_CONFIDENCE=0.25), refusal=1.0, content gaps закрыты. Sprint 6 #1/#6/#7 закрыты в session 2026-05-17 (n8n extract, N2 Quick-actions, Prev-N-QA infrastructure). Live TG E2E подтверждён 2026-05-17 EOD (5/6 N1+N2+N3+N4). **Sprint 7 (2026-05-18): polling-mode TG bridge закрыл issues #2 + #10** — публичный URL/тоннель больше не нужен. Production-readiness — Mistral paid tier (issue 7) остаётся единственный hard blocker для prod-сценария.
 
 ## 16. Docker Desktop cold start на Win11 + WSL2 = 5-10 минут
 

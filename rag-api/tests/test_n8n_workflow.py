@@ -911,3 +911,25 @@ def test_format_answer_sources_have_no_bare_score():
     # источники остаются с file + section в clean формате
     assert "<code>f1.md</code> — S1" in text
     assert "<code>f2.md</code> — S2" in text
+
+
+def test_entry_node_is_polling_mode_webhook_not_telegram_trigger():
+    """Sprint 7: TelegramTrigger заменён на Webhook node для polling-bridge режима.
+    Закрывает known-issues.md #2 (in-memory secret) и #10 (ephemeral tunnel).
+    Узел сохраняет имя 'TelegramTrigger' для совместимости connections+tests."""
+    nodes = _load_nodes()
+    entry = nodes["TelegramTrigger"]
+    assert entry["type"] == "n8n-nodes-base.webhook", entry["type"]
+    params = entry["parameters"]
+    assert params["httpMethod"] == "POST"
+    assert params["path"] == "tg-poll"
+
+
+def test_whitelist_reads_update_from_webhook_body_with_fallback():
+    """Sprint 7: Whitelist принимает обе формы — Webhook (`$json.body`) и legacy
+    TelegramTrigger (`$json`). Фолбэк нужен для unit-тестов которые подают
+    payload напрямую (без обёртки body) и для возможного отката."""
+    nodes = _load_nodes()
+    code = nodes["Whitelist"]["parameters"]["jsCode"]
+    assert "$json.body || $json" in code
+    assert "/tg/classify" in code

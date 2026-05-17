@@ -150,7 +150,22 @@ Backlog из Kimi+Codex consensus + Kimi audit (`kimi_audit_17_05_26.md`).
 - [x] **`/expand` HTML escape** (commit `8d7adf2`): chunk.content шёл в f-string без `html.escape` → TG 400 "can't parse entities" на chunks с `<https://...>`/`M&A`/`P&L`. Latent bug (smoke случайно ловил безопасный chunk).
 - [x] **n8n upgrade research → deferred** (issue #17 resolution в `docs/known-issues.md`): ALTER alias-колонка решила User.role error для runtime+CLI. CLI import всё ещё требует канонической JSON-формы (versionId/createdAt/...) → git noise. SQL UPDATE сохраняет webhook secret. Upgrade пересматривать when scaling/feature/CVE.
 
-## Sprint 7+ — production hardening (если потребуется)
+## Sprint 7 — polling-mode TG bridge ✅ DONE (2026-05-18)
+
+Cloudflare named tunnel требует payment method (memory `reference-tunnel-services-no-card`); у Юлии нет карты. Вместо tunnel-based webhook flow перешли на polling-mode.
+
+- [x] **`services/tg_poll_bridge/`** (NEW): stdlib-only Python long-poll bridge. Делает `deleteWebhook` при старте → бесконечно полит `getUpdates` (timeout=25s) → POST каждого update в `http://n8n:5678/webhook/tg-poll`. Restart-resilient.
+- [x] **`Dockerfile`**: `python:3.13-alpine`, no pip deps. Минимальный image.
+- [x] **docker-compose**: новый service `tg-poll-bridge` с `depends_on: n8n`, `restart: unless-stopped`.
+- [x] **Workflow refactor**: `TelegramTrigger` (n8n-nodes-base.telegramTrigger) → `n8n-nodes-base.webhook` (path=tg-poll, no auth). Имя ноды сохранено для совместимости с `connections` и существующими тестами.
+- [x] **Whitelist Code**: `$json.body || $json` — принимает обе формы (Webhook body + legacy direct payload). Бэк-компат для unit-тестов.
+- [x] **+2 pin-теста**. pytest 195/195.
+- [x] **known-issues.md**: #2 (webhook secret in-memory) + #10 (ephemeral tunnel) → ✅ RESOLVED.
+- [x] **n8n owner setup** (issue #12 закрыт): POST `/rest/owner/setup` → `uedomskikh@gmail.com / <strong-random>` (credentials в `.env.local`, gitignored).
+
+Trade-off: ~5s polling latency vs мгновенный webhook. Acceptable для MVP HR/legal demo.
+
+## Sprint 8+ — production hardening (если потребуется)
 
 - [ ] **Structure-aware chunking**: split по markdown `##`/`###` headers вместо фиксированных 500 токенов.
 - [ ] **Cross-encoder reranker** (BGE-Reranker-v2-m3) на top-20 → top-5.
@@ -186,7 +201,7 @@ Backlog из Kimi+Codex consensus + Kimi audit (`kimi_audit_17_05_26.md`).
 - [x] Versioning metadata + section rerank (#3, #5).
 - [x] Retrieval polish: MRR=0.76, Hit@1=0.67, refusal_accuracy=1.00 на golden set (Sprint 4+5).
 - [x] Eval CI regression gate (`pytest scripts/test_eval_regression.py`) предотвращает регрессию retrieval.
-- [ ] MVP можно показать без покупки n8n Cloud по `docs/demo-runbook.md` (зависит от cloudflare named tunnel или paid n8n).
+- [x] MVP можно показать без покупки n8n Cloud по `docs/demo-runbook.md` (Sprint 7 polling-mode bridge убрал зависимость от public URL/named tunnel).
 
 ## Known Issues
 
