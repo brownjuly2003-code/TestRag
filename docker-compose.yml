@@ -94,6 +94,12 @@ services:
         condition: service_healthy
       rag-api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:5678/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
 
   # Sprint 7: polling-mode TG bridge заменяет публичный webhook + cloudflared
   # tunnel. Long-poll Bot API getUpdates → POST в n8n internal /webhook/tg-poll.
@@ -105,10 +111,15 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?required}
       N8N_INTERNAL_WEBHOOK: ${N8N_INTERNAL_WEBHOOK:-http://n8n:5678/webhook/tg-poll}
       POLL_TIMEOUT_S: ${POLL_TIMEOUT_S:-25}
+      DELETE_WEBHOOK_ON_START: ${DELETE_WEBHOOK_ON_START:-true}
+      OFFSET_STATE_PATH: /var/lib/tg-poll-bridge/offset.txt
+    volumes:
+      - tg_poll_offset:/var/lib/tg-poll-bridge
     depends_on:
       n8n:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   postgres_data:
   n8n_data:
+  tg_poll_offset:
