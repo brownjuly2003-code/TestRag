@@ -248,6 +248,27 @@ class PostgresStore:
             rows = cursor.fetchall()
         return [{"category": row[0], "doc_count": int(row[1])} for row in rows]
 
+    def get_request_source(self, request_log_id: str, idx: int) -> dict[str, Any] | None:
+        if not self.enabled or not request_log_id or idx < 0:
+            return None
+        try:
+            with self._connect() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "select sources from request_logs where id::text = %s",
+                    (request_log_id,),
+                )
+                row = cursor.fetchone()
+        except psycopg.errors.InvalidTextRepresentation:
+            return None
+        if not row or not row[0]:
+            return None
+        sources = row[0]
+        if not isinstance(sources, list) or idx >= len(sources):
+            return None
+        entry = sources[idx]
+        return entry if isinstance(entry, dict) else None
+
     def enqueue_review(self, request_log_id: str | None, reason: str) -> str | None:
         if not self.enabled or not request_log_id:
             return None

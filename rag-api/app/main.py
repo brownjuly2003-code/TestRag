@@ -92,6 +92,18 @@ class CorpusSummaryResponse(BaseModel):
     total_docs: int
 
 
+class FollowupSource(BaseModel):
+    chunk_id: str | None = None
+    file: str | None = None
+    section: str | None = None
+    score: float | None = None
+
+
+class FollowupResponse(BaseModel):
+    question: str
+    source: FollowupSource
+
+
 CORPUS_CATEGORY_LABELS: dict[str, str] = {
     "01_hr_pol": "HR — политики и регламенты",
     "02_hr_tpl": "HR — шаблоны кадровых документов",
@@ -682,6 +694,37 @@ def history(telegram_user_id: str, limit: int = 5) -> HistoryResponse:
     runtime = get_runtime()
     items = runtime.store.recent_requests(telegram_user_id=telegram_user_id, limit=limit)
     return HistoryResponse(items=[HistoryItem(**row) for row in items])
+
+
+@app.get("/followup", response_model=FollowupResponse)
+def followup(request_log_id: str, idx: int = 0) -> FollowupResponse:
+    if not request_log_id:
+        raise HTTPException(status_code=400, detail="request_log_id required")
+    if idx < 0 or idx > 9:
+        raise HTTPException(status_code=400, detail="idx must be in [0, 9]")
+    runtime = get_runtime()
+    source = runtime.store.get_request_source(request_log_id, idx)
+    if not source:
+        raise HTTPException(status_code=404, detail="source not found")
+    section = (source.get("section") or "").strip()
+    file_name = (source.get("file") or "").strip()
+    if section and file_name:
+        question = f"Расскажи подробнее про раздел «{section}» из документа {file_name}."
+    elif section:
+        question = f"Расскажи подробнее про раздел «{section}»."
+    elif file_name:
+        question = f"Расскажи подробнее про документ {file_name}."
+    else:
+        question = "Расскажи подробнее про этот источник."
+    return FollowupResponse(
+        question=question,
+        source=FollowupSource(
+            chunk_id=source.get("chunk_id"),
+            file=source.get("file"),
+            section=source.get("section"),
+            score=source.get("score"),
+        ),
+    )
 
 
 @app.get("/docs/summary", response_model=CorpusSummaryResponse)

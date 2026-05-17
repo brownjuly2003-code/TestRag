@@ -58,6 +58,7 @@ class FakeStore:
             {"category": "01_hr_pol", "doc_count": 60},
             {"category": "07_faq", "doc_count": 8},
         ]
+        self.request_sources: dict[tuple[str, int], dict] = {}
 
     def ingest_documents(self, docs_path, embedding_client) -> int:
         return 0
@@ -92,6 +93,9 @@ class FakeStore:
 
     def corpus_summary(self):
         return self.corpus_summary_rows
+
+    def get_request_source(self, request_log_id, idx):
+        return self.request_sources.get((request_log_id, idx))
 
 
 class FakeDocumentPlanner:
@@ -281,6 +285,71 @@ def test_docs_summary_endpoint_groups_by_category(monkeypatch):
     labels = {c["category"]: c["label"] for c in body["categories"]}
     assert labels["01_hr_pol"] == "HR — политики и регламенты"
     assert labels["07_faq"] == "FAQ — частые вопросы"
+
+
+def test_followup_returns_question_with_section_and_file(monkeypatch):
+    store = FakeStore()
+    store.request_sources[("rl-1", 0)] = {
+        "chunk_id": "abc",
+        "file": "01_hr_pol_safety.md",
+        "section": "Контролируемая зона",
+        "score": 0.92,
+    }
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/followup", params={"request_log_id": "rl-1", "idx": 0})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "Контролируемая зона" in body["question"]
+    assert "01_hr_pol_safety.md" in body["question"]
+    assert body["source"]["chunk_id"] == "abc"
+    assert body["source"]["section"] == "Контролируемая зона"
+
+
+def test_followup_returns_question_without_section(monkeypatch):
+    store = FakeStore()
+    store.request_sources[("rl-1", 0)] = {
+        "chunk_id": "abc",
+        "file": "07_faq_general.md",
+        "section": None,
+        "score": 0.5,
+    }
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/followup", params={"request_log_id": "rl-1", "idx": 0})
+
+    assert response.status_code == 200
+    assert "07_faq_general.md" in response.json()["question"]
+
+
+def test_followup_returns_404_when_source_missing(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/followup", params={"request_log_id": "rl-x", "idx": 0})
+
+    assert response.status_code == 404
+
+
+def test_followup_rejects_negative_idx(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/followup", params={"request_log_id": "rl-1", "idx": -1})
+
+    assert response.status_code == 400
+
+
+def test_followup_requires_request_log_id():
+    with TestClient(app) as client:
+        response = client.get("/followup", params={"idx": 0})
+
+    assert response.status_code == 422
 
 
 def test_document_type_detection_returns_missing_fields(monkeypatch):

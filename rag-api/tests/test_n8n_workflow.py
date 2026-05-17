@@ -159,7 +159,9 @@ def test_unknown_bad_reason_falls_back_to_direct_reply():
 def test_direct_reply_routes_without_rag_call():
     workflow = _load_workflow()
     assert workflow["connections"]["Feedback?"]["main"][1][0]["node"] == "Bad Clarify?"
-    assert workflow["connections"]["Bad Clarify?"]["main"][1][0]["node"] == "Direct Reply?"
+    # Bad Clarify? no → Followup? → (no) → Direct Reply?
+    assert workflow["connections"]["Bad Clarify?"]["main"][1][0]["node"] == "Followup?"
+    assert workflow["connections"]["Followup?"]["main"][1][0]["node"] == "Direct Reply?"
     assert workflow["connections"]["Direct Reply?"]["main"][0][0]["node"] == "Send Direct Reply"
     assert workflow["connections"]["Direct Reply?"]["main"][1][0]["node"] == "History?"
     assert workflow["connections"]["Docs?"]["main"][1][0]["node"] == "Send Typing"
@@ -173,23 +175,25 @@ def test_bad_clarify_routes_to_edit_reply_markup():
 
 def test_telegram_send_nodes_disable_n8n_attribution():
     nodes = _load_nodes()
-    for node_name in ["Send Answer", "Send Feedback Ack", "Send Denied", "Send Direct Reply"]:
+    for node_name in ["Send Feedback Ack", "Send Denied", "Send Direct Reply"]:
         assert nodes[node_name]["parameters"]["additionalFields"]["appendAttribution"] is False
 
 
 def test_telegram_send_nodes_use_html_parse_mode():
     nodes = _load_nodes()
-    for node_name in ["Send Answer", "Send Feedback Ack", "Send Denied", "Send Direct Reply"]:
+    for node_name in ["Send Feedback Ack", "Send Denied", "Send Direct Reply"]:
         assert nodes[node_name]["parameters"]["additionalFields"]["parse_mode"] == "HTML"
 
 
-def test_send_answer_has_two_feedback_buttons():
+def test_send_answer_is_http_node_with_dynamic_reply_markup():
+    """Send Answer теперь HTTP sendMessage: inline_keyboard приходит dynamic из Format Answer."""
     nodes = _load_nodes()
-    buttons = nodes["Send Answer"]["parameters"]["inlineKeyboard"]["rows"][0]["row"]["buttons"]
-    assert len(buttons) == 2
-    labels = [b["text"] for b in buttons]
-    assert labels == ["👍 Полезно", "👎 Неточно"]
-    assert all("sources" not in b["additionalFields"]["callback_data"] for b in buttons)
+    node = nodes["Send Answer"]
+    assert node["type"] == "n8n-nodes-base.httpRequest"
+    assert "sendMessage" in node["parameters"]["url"]
+    body = node["parameters"]["jsonBody"]
+    assert "$json.inline_keyboard" in body
+    assert "parse_mode: 'HTML'" in body or 'parse_mode: "HTML"' in body
 
 
 def test_ask_rag_reads_user_input_from_whitelist_not_send_typing_response():
@@ -489,6 +493,146 @@ def test_format_docs_renders_categories_with_total():
     assert "Корпус: 68 документов" in text
     assert "• HR — политики — 60" in text
     assert "• FAQ — 8" in text
+
+
+def test_followup_callback_parses_to_followup_request_event():
+    body = _run_whitelist(
+        {
+            "callback_query": {
+                "data": "followup:1:6f0e7b1a-0000-0000-0000-000000000abc",
+                "from": {"id": 42},
+                "message": {"chat": {"id": 42}, "message_id": 17},
+            }
+        }
+    )
+    assert body["authorized"] is True
+    assert body["event_type"] == "followup_request"
+    assert body["followup_idx"] == 1
+    assert body["request_log_id"] == "6f0e7b1a-0000-0000-0000-000000000abc"
+
+
+def test_malformed_followup_callback_falls_back_to_direct_reply():
+    body = _run_whitelist(
+        {
+            "callback_query": {
+                "data": "followup:abc:",
+                "from": {"id": 42},
+                "message": {"chat": {"id": 42}, "message_id": 17},
+            }
+        }
+    )
+    assert body["authorized"] is True
+    assert body["event_type"] == "direct_reply"
+    assert "не удалось" in body["text"].lower() or "вопрос текстом" in body["text"].lower()
+
+
+def test_workflow_has_followup_branch_nodes():
+    workflow = _load_workflow()
+    nodes = {n["name"]: n for n in workflow["nodes"]}
+    for required in ["Followup?", "Resolve Follow-up", "Send Typing Followup", "Ask RAG Followup"]:
+        assert required in nodes, f"missing {required}"
+
+
+def test_followup_branch_routes_through_resolve_then_typing_then_ask():
+    workflow = _load_workflow()
+    # Bad Clarify? main[1] (no) теперь → Followup?, не Direct Reply?
+    assert workflow["connections"]["Bad Clarify?"]["main"][1][0]["node"] == "Followup?"
+    # Followup? yes → Resolve Follow-up
+    assert workflow["connections"]["Followup?"]["main"][0][0]["node"] == "Resolve Follow-up"
+    # Followup? no → Direct Reply?
+    assert workflow["connections"]["Followup?"]["main"][1][0]["node"] == "Direct Reply?"
+    # Resolve → Send Typing FU → Ask RAG FU → Format Answer
+    assert workflow["connections"]["Resolve Follow-up"]["main"][0][0]["node"] == "Send Typing Followup"
+    assert workflow["connections"]["Send Typing Followup"]["main"][0][0]["node"] == "Ask RAG Followup"
+    assert workflow["connections"]["Ask RAG Followup"]["main"][0][0]["node"] == "Format Answer"
+
+
+def test_resolve_followup_node_calls_followup_endpoint_with_whitelist_params():
+    nodes = _load_nodes()
+    node = nodes["Resolve Follow-up"]
+    assert node["type"] == "n8n-nodes-base.httpRequest"
+    assert node["parameters"]["method"] == "GET"
+    url = node["parameters"]["url"]
+    assert "/followup" in url
+    assert "$node['Whitelist'].json.request_log_id" in url or '$node["Whitelist"].json.request_log_id' in url
+    assert "$node['Whitelist'].json.followup_idx" in url or '$node["Whitelist"].json.followup_idx' in url
+
+
+def test_ask_rag_followup_reads_question_from_resolve_node():
+    """Send Typing Followup затирает $json своим Bot API ответом, поэтому Ask RAG FU
+    должен читать question из $node['Resolve Follow-up'].json, не из $json."""
+    nodes = _load_nodes()
+    body = nodes["Ask RAG Followup"]["parameters"]["jsonBody"]
+    assert "$node['Resolve Follow-up'].json.question" in body or '$node["Resolve Follow-up"].json.question' in body
+    assert "$node['Whitelist'].json.user_id" in body or '$node["Whitelist"].json.user_id' in body
+    assert "$json.question" not in body
+
+
+def test_format_answer_emits_inline_keyboard_with_followup_and_feedback_buttons_on_last_part():
+    items = _run_format_answer_all(
+        {
+            "answer": "Короткий ответ про controlled zone.",
+            "request_log_id": "rl-abc",
+            "sources": [
+                {"file": "01_hr_pol_safety.md", "section": "Контролируемая зона", "score": 0.92},
+                {"file": "06_comp_security.md", "section": "Процедура доступа", "score": 0.81},
+                {"file": "07_faq_general.md", "section": "Прочее", "score": 0.4},
+            ],
+        }
+    )
+    assert len(items) == 1
+    keyboard = items[0]["inline_keyboard"]
+    assert keyboard is not None
+    rows = keyboard["inline_keyboard"]
+    # 2 follow-up + 2 feedback = 2 ряда
+    assert len(rows) == 2
+    follow_row, fb_row = rows
+    assert all(b["callback_data"].startswith("followup:") for b in follow_row)
+    assert [b["callback_data"] for b in follow_row] == [
+        "followup:0:rl-abc",
+        "followup:1:rl-abc",
+    ]
+    assert all(b["text"].startswith("📎") for b in follow_row)
+    assert [b["callback_data"] for b in fb_row] == [
+        "feedback:good:rl-abc",
+        "feedback:bad:rl-abc",
+    ]
+    # callback_data ≤ 64 bytes (Telegram limit)
+    for row in rows:
+        for b in row:
+            assert len(b["callback_data"].encode("utf-8")) <= 64
+
+
+def test_format_answer_omits_followup_row_when_no_sources():
+    items = _run_format_answer_all(
+        {
+            "answer": "Не нашёл подходящих источников.",
+            "request_log_id": "rl-empty",
+            "sources": [],
+        }
+    )
+    keyboard = items[0]["inline_keyboard"]
+    rows = keyboard["inline_keyboard"]
+    assert len(rows) == 1  # только feedback row
+    assert [b["callback_data"] for b in rows[0]] == [
+        "feedback:good:rl-empty",
+        "feedback:bad:rl-empty",
+    ]
+
+
+def test_format_answer_non_last_part_has_null_keyboard():
+    long_answer = "Параграф.\n\n" * 400  # 2+ parts
+    items = _run_format_answer_all(
+        {
+            "answer": long_answer,
+            "request_log_id": "rl-long",
+            "sources": [{"file": "a.md", "section": "X", "score": 0.5}],
+        }
+    )
+    assert len(items) >= 2
+    for it in items[:-1]:
+        assert it["inline_keyboard"] is None
+    assert items[-1]["inline_keyboard"] is not None
 
 
 def test_format_answer_md_conversion_does_not_re_escape_safe_tags():

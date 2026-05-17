@@ -12,24 +12,26 @@
 - Стек: FastAPI + Mistral + hybrid retrieval (BM25 + pgvector) → n8n (24 узла) → Telegram-бот @AIagentJu_bot.
 - Документация: README.md, mvp-plan.md, docs/demo-runbook.md, docs/legal-document-prompts.md, docs/research/SYNTHESIS.md, docs/findings/.
 
-Текущее состояние (HEAD `daa8795`, 2026-05-17 day):
-- pytest 68/68 (+12 Sprint 1, +6 Sprint 1 fixes, +14 Sprint 2 /history+/docs+M7, +5 split+balance).
+Текущее состояние (HEAD `df65f71` + N1 uncommitted, 2026-05-17 evening):
+- pytest 82/82 (+5 /followup API + 9 N1 workflow поверх 68 baseline).
 - Sprint 1 deployed + TG smoke ✓ через @AIagentJu_bot.
 - Sprint 2 deployed:
   - M7 schema: answer_feedback +category +free_text +chunk_ids.
   - M5 команды: /help, /clear, /history, /docs.
   - N5 endpoint: GET /docs/summary.
+- Sprint 3 N1 deployed (uncommitted, ждёт TG live smoke):
+  - GET /followup?request_log_id=X&idx=Y → crafted question из request_logs.sources[idx]. Handles invalid UUID → 404.
+  - PostgresStore.get_request_source(rl, idx) ловит psycopg.errors.InvalidTextRepresentation → None.
+  - Whitelist: парсит `followup:<idx>:<rl>` (47 chars total, fits 64-byte TG limit) → event_type='followup_request'.
+  - Workflow 28 узлов (+4): Followup? If, Resolve Follow-up, Send Typing Followup, Ask RAG Followup. Bad Clarify? no → Followup? → (yes → Resolve → Send Typing FU → Ask RAG FU → Format Answer) / (no → Direct Reply?).
+  - Send Answer: телеграм-узел → HTTP sendMessage с dynamic reply_markup из $json.inline_keyboard (Format Answer строит keyboard на is_last: 2 follow-up + 2 feedback). Non-last parts → inline_keyboard=null.
+  - Format Answer dedup сохраняет _originalIdx → callback_data использует НЕ-deduped позицию в request_logs.sources.
 - TG split: Format Answer split по \n\n/предложениям до 4000 chars, balanceTags. Workflow Last Part? If → keyboard только на is_last. Live smoke .tmp/smoke_split.py: 2 parts (3895+674 chars) через Bot API → message_ids [97,98] OK.
-- Cloudflare tunnel: trycloudflare URLs эфемерны, пересоздавать процедурой из docs/demo-runbook.md.
+- Cloudflare tunnel: trycloudflare URLs эфемерны, текущий `brooklyn-candidate-supplemental-abs.trycloudflare.com` жив. Пересоздавать процедурой из docs/demo-runbook.md.
 
 Что осталось (Sprint 3, по приоритету):
 
-1. **N1 follow-up question buttons** (отложен из Sprint 2). План:
-   - Новый endpoint `GET /followup?request_log_id=X&idx=Y` → возвращает crafted question из request_logs.sources[Y].section.
-   - storage.get_request_source(rl_id, idx).
-   - Whitelist parser: callback `followup:<idx>:<rl_uuid>` (47 chars, fits в 64-byte лимит TG) → event_type='followup_request'.
-   - Workflow: Followup? If → Resolve Follow-up HTTP → Set Question (Code) → Send Typing → Ask RAG API → ...
-   - Send Answer refactor: с Telegram-node на HTTP node (sendMessage), чтобы inline_keyboard был dynamic — добавить 2 follow-up кнопки на основе sources[0..1].section + 2 feedback кнопки.
+1. ✅ **N1 follow-up question buttons** — DONE (uncommitted). Реализация выше. TG live smoke остаётся юзеру: задать вопрос → дождаться ответа с 2 follow-up + 2 feedback кнопками → нажать «📎 Подробнее: …» → проверить что бот формирует новый вопрос «Расскажи подробнее про раздел … документа …» и присылает второй ответ с новой клавиатурой.
 
 2. **N3 Human handover**: feedback:bad_human уже пишет category='human' + review_queue. Добавить:
    - Last 5 messages user'а → review_queue.context (новый jsonb column).
@@ -59,12 +61,14 @@ Sprint 2 TG-смок (если ещё не пробовала после `daa879
 
 ```powershell
 cd D:\TestRag
-python -m pytest -p no:schemathesis  # 68 passed
+python -m pytest -p no:schemathesis  # 82 passed
 docker compose config --quiet
 docker compose up -d
 curl http://localhost:8000/health    # chunk_count=207
 curl 'http://localhost:8000/history?telegram_user_id=432751211&limit=5'
 curl http://localhost:8000/docs/summary
+# N1 smoke: real rl_id из request_logs (см. ниже)
+curl 'http://localhost:8000/followup?request_log_id=71ec9a0e-4c58-4294-adc4-31ba29c3830a&idx=0'
 python .tmp/smoke_split.py           # send synthetic 4000-char split to chat
 ```
 
