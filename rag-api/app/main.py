@@ -24,6 +24,9 @@ from .rag import (
 )
 from .settings import get_settings
 from .storage import PostgresStore
+from . import tg_copy
+from .tg_classifier import classify as classify_tg_update
+from .tg_classifier import parse_allowed_ids
 
 
 @asynccontextmanager
@@ -723,6 +726,53 @@ def to_document_sources(results: list[Any]) -> list[DocumentSource]:
             )
         )
     return sources
+
+
+class TelegramClassifyRequest(BaseModel):
+    update: dict[str, Any]
+
+
+class TelegramClassifyResponse(BaseModel):
+    authorized: bool
+    chat_id: int | None = None
+    user_id: str
+    text: str
+    user_message_id: int | None = None
+    event_type: str | None = None
+    message_id: int | None = None
+    rating: str | None = None
+    category: str | None = None
+    request_log_id: str | None = None
+    followup_idx: int | None = None
+
+
+class TelegramCopyResponse(BaseModel):
+    key: str
+    text: str
+
+
+@app.post("/tg/classify", response_model=TelegramClassifyResponse)
+def tg_classify(request: TelegramClassifyRequest) -> TelegramClassifyResponse:
+    """Sprint 6 #1: бизнес-логика whitelist/routing из n8n Whitelist Code.
+
+    n8n Whitelist node теперь — тонкий HttpRequest на этот endpoint.
+    Это закрывает Issue #14 (n8n coupling) из kimi_audit и разрешает
+    N8N_BLOCK_ENV_ACCESS_IN_NODE=true в docker-compose.
+    """
+    settings = get_settings()
+    allowed = parse_allowed_ids(settings.allowed_telegram_user_ids_raw)
+    result = classify_tg_update(request.update, allowed)
+    return TelegramClassifyResponse(**result)
+
+
+@app.get("/tg/copy/{key}", response_model=TelegramCopyResponse)
+def tg_copy_get(key: str) -> TelegramCopyResponse:
+    """Single point of edit для copy-блоков. Полезно для preview из n8n editor
+    или smoke-тестов copy без re-importa workflow."""
+    text = tg_copy.COPY_BLOCKS.get(key)
+    if text is None:
+        raise HTTPException(status_code=404, detail=f"Unknown copy key: {key}")
+    return TelegramCopyResponse(key=key, text=text)
 
 
 @app.get("/health")

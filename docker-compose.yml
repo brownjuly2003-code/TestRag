@@ -34,6 +34,9 @@ services:
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       MISTRAL_CHAT_MODEL: ${MISTRAL_CHAT_MODEL:-mistral-small-latest}
       MISTRAL_EMBEDDING_MODEL: ${MISTRAL_EMBEDDING_MODEL:-mistral-embed}
+      # Sprint 6 #1: whitelist логика вынесена в /tg/classify, rag-api теперь
+      # читает ALLOWED_TELEGRAM_USER_IDS вместо n8n.
+      ALLOWED_TELEGRAM_USER_IDS: ${ALLOWED_TELEGRAM_USER_IDS:-}
     ports:
       - "8000:8000"
     volumes:
@@ -67,9 +70,10 @@ services:
       N8N_PROTOCOL: http
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_SECURE_COOKIE: "false"
-      # N8N_BLOCK_ENV_ACCESS_IN_NODE=false требуется текущим Whitelist node (читает $env.ALLOWED_TELEGRAM_USER_IDS).
-      # TODO Sprint 6: вынести whitelist в FastAPI endpoint, после этого set=true. Issue: codex-audit#3.
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Sprint 6 #1: Whitelist Code node теперь — тонкий HttpRequest на /tg/classify,
+      # бизнес-логика в rag-api. Ни одна Code node больше не читает $env →
+      # closing Issue #14 codex-audit#3.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
       WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
       RAG_API_URL: ${RAG_API_URL:-http://rag-api:8000}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}

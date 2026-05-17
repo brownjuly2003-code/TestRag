@@ -35,7 +35,18 @@ def test_openapi_required_paths_present():
     schema = app.openapi()
     paths = set(schema.get("paths", {}).keys())
     # Core контракт — эти endpoints используются n8n workflow + smoke-скриптами.
-    required = {"/health", "/ask", "/feedback", "/history", "/followup", "/docs/summary", "/metrics"}
+    required = {
+        "/health",
+        "/ask",
+        "/feedback",
+        "/history",
+        "/followup",
+        "/docs/summary",
+        "/metrics",
+        # Sprint 6 #1: n8n routing → rag-api
+        "/tg/classify",
+        "/tg/copy/{key}",
+    }
     missing = required - paths
     assert not missing, f"Missing required paths: {missing}"
 

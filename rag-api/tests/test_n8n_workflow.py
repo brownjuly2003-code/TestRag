@@ -2,6 +2,8 @@ import json
 import subprocess
 from pathlib import Path
 
+from app.tg_classifier import classify as _classify_update
+
 
 WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / "n8n" / "workflows" / "hr-legal-rag-workflow.json"
@@ -17,16 +19,9 @@ def _load_nodes() -> dict:
 
 
 def _run_whitelist(payload: dict) -> dict:
-    nodes = _load_nodes()
-    whitelist_code = nodes["Whitelist"]["parameters"]["jsCode"]
-    script = f"""
-const $env = {{ ALLOWED_TELEGRAM_USER_IDS: '42' }};
-const $json = {json.dumps(payload)};
-const result = new Function('$json', '$env', {json.dumps(whitelist_code)})($json, $env);
-console.log(JSON.stringify(result[0].json));
-"""
-    result = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
-    return json.loads(result.stdout)
+    """Sprint 6 #1: Whitelist node — тонкий HTTP-прокси на /tg/classify.
+    Тестируем напрямую Python-реализацию (parity guaranteed: одна функция)."""
+    return _classify_update(payload, ["42"])
 
 
 def _run_format_answer(payload: dict, chat_id: int = 42) -> dict:

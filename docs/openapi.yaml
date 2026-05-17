@@ -3,6 +3,64 @@ info:
   title: TestRag RAG API
   version: 0.1.0
 paths:
+  /tg/classify:
+    post:
+      summary: Tg Classify
+      description: 'Sprint 6 #1: бизнес-логика whitelist/routing из n8n Whitelist Code.
+
+
+        n8n Whitelist node теперь — тонкий HttpRequest на этот endpoint.
+
+        Это закрывает Issue #14 (n8n coupling) из kimi_audit и разрешает
+
+        N8N_BLOCK_ENV_ACCESS_IN_NODE=true в docker-compose.'
+      operationId: tg_classify_tg_classify_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelegramClassifyRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramClassifyResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /tg/copy/{key}:
+    get:
+      summary: Tg Copy Get
+      description: 'Single point of edit для copy-блоков. Полезно для preview из n8n editor
+
+        или smoke-тестов copy без re-importa workflow.'
+      operationId: tg_copy_get_tg_copy__key__get
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramCopyResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /health:
     get:
       summary: Health
@@ -739,6 +797,86 @@ components:
       - chunk_id
       - score
       title: Source
+    TelegramClassifyRequest:
+      properties:
+        update:
+          additionalProperties: true
+          type: object
+          title: Update
+      type: object
+      required:
+      - update
+      title: TelegramClassifyRequest
+    TelegramClassifyResponse:
+      properties:
+        authorized:
+          type: boolean
+          title: Authorized
+        chat_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Chat Id
+        user_id:
+          type: string
+          title: User Id
+        text:
+          type: string
+          title: Text
+        user_message_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: User Message Id
+        event_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Event Type
+        message_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Message Id
+        rating:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rating
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        request_log_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Request Log Id
+        followup_idx:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Followup Idx
+      type: object
+      required:
+      - authorized
+      - user_id
+      - text
+      title: TelegramClassifyResponse
+    TelegramCopyResponse:
+      properties:
+        key:
+          type: string
+          title: Key
+        text:
+          type: string
+          title: Text
+      type: object
+      required:
+      - key
+      - text
+      title: TelegramCopyResponse
     ValidationError:
       properties:
         loc:

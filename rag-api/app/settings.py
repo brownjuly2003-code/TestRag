@@ -17,6 +17,7 @@ class Settings:
     mistral_api_key: str
     mistral_chat_model: str
     mistral_embedding_model: str
+    allowed_telegram_user_ids_raw: str
 
 
 @lru_cache
@@ -30,4 +31,5 @@ def get_settings() -> Settings:
         mistral_api_key=os.getenv("MISTRAL_API_KEY", ""),
         mistral_chat_model=os.getenv("MISTRAL_CHAT_MODEL", "mistral-small-latest"),
         mistral_embedding_model=os.getenv("MISTRAL_EMBEDDING_MODEL", "mistral-embed"),
+        allowed_telegram_user_ids_raw=os.getenv("ALLOWED_TELEGRAM_USER_IDS", ""),
     )
