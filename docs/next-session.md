@@ -9,7 +9,7 @@
 
 Контекст:
 - MVP HR/legal RAG-ассистент. Aviation profile pass на 200 docs, MVP-44 (chunk_count=207, docs=48 в БД).
-- Стек: FastAPI + Mistral + hybrid retrieval (BM25 + pgvector) → n8n (24 узла) → Telegram-бот @AIagentJu_bot.
+- Стек: FastAPI + Mistral + hybrid retrieval (BM25 + pgvector + section-keyword rerank) → n8n (28 узлов) → Telegram-бот @AIagentJu_bot.
 - Документация: README.md, mvp-plan.md, docs/demo-runbook.md, docs/legal-document-prompts.md, docs/research/SYNTHESIS.md, docs/findings/.
 
 Текущее состояние (HEAD после ТЗ-критика sweep, 2026-05-17 EOS):
