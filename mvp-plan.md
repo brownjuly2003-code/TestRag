@@ -152,7 +152,7 @@ Backlog из Kimi+Codex consensus + Kimi audit (`kimi_audit_17_05_26.md`).
 
 ## Sprint 7 — polling-mode TG bridge ✅ DONE (2026-05-18)
 
-Cloudflare named tunnel требует payment method (memory `reference-tunnel-services-no-card`); у Юлии нет карты. Вместо tunnel-based webhook flow перешли на polling-mode.
+Перешли с tunnel-based webhook flow на polling-mode: убирает зависимость от публичного URL целиком, закрывает known-issues #2 + #10.
 
 - [x] **`services/tg_poll_bridge/`** (NEW): stdlib-only Python long-poll bridge. Делает `deleteWebhook` при старте → бесконечно полит `getUpdates` (timeout=25s) → POST каждого update в `http://n8n:5678/webhook/tg-poll`. Restart-resilient.
 - [x] **`Dockerfile`**: `python:3.13-alpine`, no pip deps. Минимальный image.

@@ -112,7 +112,7 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 
 **Trade-off**: ~5s polling latency vs мгновенный webhook. Для MVP HR/legal demo приемлемо.
 
-**Fallback (если когда-то нужен публичный URL)**: cloudflared/ngrok scripts в `docs/demo-runbook.md` остались, но более не required. Cloudflare named tunnel требует payment method ([[reference-tunnel-services-no-card]]) — не использовать.
+**Fallback (если когда-то нужен публичный URL)**: cloudflared/ngrok scripts в `docs/demo-runbook.md` остались, но более не required.
 
 ## 11. Workflow .ready vs editing races (CX-related)
 

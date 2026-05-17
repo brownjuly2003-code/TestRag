@@ -79,7 +79,9 @@ def _summarize(update: dict) -> str:
     return "other"
 
 
-def forward(update: dict) -> None:
+def forward(update: dict) -> bool:
+    """Returns True iff n8n accepted update. Caller advances offset only on
+    success — иначе at-most-once seman­tika теряет update при n8n flap."""
     try:
         _request(N8N_URL, body=update, timeout=15)
         log.info(
@@ -87,14 +89,17 @@ def forward(update: dict) -> None:
             update.get("update_id"),
             _summarize(update),
         )
+        return True
     except urllib.error.HTTPError as exc:
         log.error(
             "forward HTTP %s for update_id=%s",
             exc.code,
             update.get("update_id"),
         )
+        return False
     except Exception as exc:
         log.error("forward failed for update_id=%s: %s", update.get("update_id"), exc)
+        return False
 
 
 def poll_loop() -> None:
@@ -130,8 +135,13 @@ def poll_loop() -> None:
             time.sleep(5)
             continue
 
+        # At-least-once delivery: advance offset ТОЛЬКО на successful forward,
+        # иначе same update retry'ится в следующем poll. Если n8n down — bridge
+        # пилит retry-loop с backoff (TG side держит updates до 24h).
         for update in resp.get("result", []):
-            forward(update)
+            if not forward(update):
+                time.sleep(2)
+                break
             offset = update["update_id"] + 1
 
 

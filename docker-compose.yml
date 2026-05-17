@@ -80,8 +80,12 @@ services:
       RAG_API_URL: ${RAG_API_URL:-http://rag-api:8000}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       ALLOWED_TELEGRAM_USER_IDS: ${ALLOWED_TELEGRAM_USER_IDS:-}
+    # Sprint 7 hardening: bind только на 127.0.0.1, чтобы `/webhook/tg-poll`
+    # (no-auth Webhook node) не был spoofable извне. Bridge стучит через
+    # docker-network (имя контейнера `n8n`), хост-доступ через `localhost:5678`
+    # для n8n UI/CLI остаётся.
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678"
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/workflows:ro
