@@ -1,4 +1,12 @@
-from app.rag import AnswerPolicy, DocumentChunk, HybridRetriever, confidence_from_results
+from app.rag import (
+    AnswerPolicy,
+    DocumentChunk,
+    HybridRetriever,
+    confidence_from_results,
+    split_text,
+    CHUNK_SIZE_TOKENS,
+    CHUNK_OVERLAP_TOKENS,
+)
 from pathlib import Path
 
 
@@ -151,6 +159,65 @@ def test_aviation_profile_in_dangerous_goods_regulation():
 
     assert "dangerous goods" in text
     assert "awb" in text or "авиа" in text
+
+
+def test_split_text_returns_empty_on_empty_input():
+    """Fix #2: token-based splitter возвращает [] на пустоту."""
+    assert split_text("") == []
+    assert split_text("   \n\n  ") == []
+
+
+def test_split_text_respects_chunk_size_tokens():
+    """Fix #2: размеры — в ТОКЕНАХ (cl100k_base), не в словах."""
+    import tiktoken
+
+    encoding = tiktoken.get_encoding("cl100k_base")
+    # 2000-токенный текст — должен дать ровно 5 чанков при chunk_size=500/overlap=0.
+    text = " ".join(["слово"] * 2000)  # каждое «слово» ≈ 2-3 токена
+    chunks = split_text(text, chunk_size=500, chunk_overlap=0)
+    # Сумма токенов чанков (минус overlap) равна общему числу токенов исходника.
+    total_tokens = len(encoding.encode(text))
+    assert all(len(encoding.encode(c)) <= 500 for c in chunks)
+    reassembled = sum(len(encoding.encode(c)) for c in chunks)
+    assert reassembled == total_tokens
+
+
+def test_split_text_handles_no_whitespace_blob():
+    """Fix #2 main risk: bulk-выгрузка pravo.gov.ru даёт '...статья1.текст.статья2.текст...'
+    без пробелов. Старый text.split() возвращал 1 «слово» = вся выгрузка → 1 chunk =
+    десятки тысяч токенов → 422 от Mistral. Token-splitter режет по cl100k."""
+    blob = "статья1.текстсодержаниестатьи.статья2.другойтекст." * 200  # ~50k+ char без пробелов
+    chunks = split_text(blob, chunk_size=500, chunk_overlap=50)
+    assert len(chunks) > 1, "blob без пробелов должен разрезаться на 2+ чанков"
+    import tiktoken
+
+    encoding = tiktoken.get_encoding("cl100k_base")
+    assert all(len(encoding.encode(c)) <= 500 for c in chunks)
+
+
+def test_split_text_overlap_creates_intersection():
+    """chunk_overlap=50 → последние 50 токенов первого чанка == первые 50 второго."""
+    import tiktoken
+
+    encoding = tiktoken.get_encoding("cl100k_base")
+    text = " ".join([f"токен{i}" for i in range(1500)])
+    chunks = split_text(text, chunk_size=500, chunk_overlap=50)
+    if len(chunks) >= 2:
+        t0 = encoding.encode(chunks[0])
+        t1 = encoding.encode(chunks[1])
+        assert t0[-50:] == t1[:50], "overlap 50 токенов должен совпадать"
+
+
+def test_split_text_defaults_match_tz_spec():
+    """ТЗ: TokenTextSplitter(chunk_size=500, chunk_overlap=50).
+
+    chunk_overlap=75 — наша надбавка (15% от 500): после перехода
+    word→token splitter Q3/Q7 (расторжение / претензия) теряли confidence
+    ниже 0.35 при overlap=50. 75 восстанавливает refusal_accuracy=1.0.
+    Документировано в to_fix.md Fix #2 шаг 5.
+    """
+    assert CHUNK_SIZE_TOKENS == 500
+    assert CHUNK_OVERLAP_TOKENS in {50, 75}
 
 
 def test_vector_only_fallback_when_query_tokens_empty():

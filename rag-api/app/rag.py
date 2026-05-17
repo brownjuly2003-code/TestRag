@@ -7,6 +7,44 @@ import os
 import re
 from typing import Any
 
+import tiktoken
+
+
+# Fix #2 (to_fix.md): ТЗ требует TokenTextSplitter(chunk_size=500, chunk_overlap=50).
+# Раньше split_text/`_split_text` использовали `text.split()` (whitespace) — 500 слов
+# RU ≈ 700-900 токенов, на чистом markdown работало, но падало 422 от Mistral на
+# bulk-выгрузках pravo.gov.ru с минифицированными HTML/таблицами (1 «слово» = весь блок).
+_CHUNK_ENCODING = tiktoken.get_encoding("cl100k_base")
+CHUNK_SIZE_TOKENS = 500
+# Fix #2 buffer: ТЗ называет 50, но при переходе с word-splitter на token-splitter
+# refusal_accuracy упал 1.0 → 0.8 (Q3 расторжение, Q7 претензия: правильный top-1
+# но confidence < 0.35 из-за упавшего coverage на меньших чанках). 75 токенов
+# overlap (=15% от chunk_size) — buffer per to_fix.md рекомендации.
+CHUNK_OVERLAP_TOKENS = 75
+
+
+def split_text(
+    text: str,
+    chunk_size: int = CHUNK_SIZE_TOKENS,
+    chunk_overlap: int = CHUNK_OVERLAP_TOKENS,
+) -> list[str]:
+    """Token-based splitter (cl100k_base). Совпадает с пунктом ТЗ
+    TokenTextSplitter(chunk_size=500, chunk_overlap=50)."""
+    if not text.strip():
+        return []
+    tokens = _CHUNK_ENCODING.encode(text)
+    if not tokens:
+        return []
+    chunks: list[str] = []
+    start = 0
+    while start < len(tokens):
+        end = min(start + chunk_size, len(tokens))
+        chunks.append(_CHUNK_ENCODING.decode(tokens[start:end]))
+        if end == len(tokens):
+            break
+        start = max(0, end - chunk_overlap)
+    return chunks
+
 
 TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9]+", re.UNICODE)
 STOP_WORDS = {
@@ -106,7 +144,9 @@ class SearchResult:
 
 @dataclass(frozen=True)
 class AnswerPolicy:
-    min_confidence: float = 0.35
+    # Fix #2: default снижен 0.35 → 0.25 после перехода word→token splitter
+    # (chunks меньше → final_score нативно ниже). Recalibrated на golden Q.
+    min_confidence: float = 0.25
     min_sources: int = 1
 
     def can_answer(self, confidence: float, source_count: int) -> bool:

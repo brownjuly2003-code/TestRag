@@ -62,9 +62,12 @@ class BackfillCursor(FakeCursor):
             self._fetchone = ("document-1",)
 
     def fetchall(self):
+        # Fix #2: токенайзер сохраняет '\n\n' между header и body — фикстура должна
+        # отдавать тот же формат, иначе ingest решит что контент изменился и
+        # удалит-перевставит chunks вместо backfill embeddings.
         if "select content from document_chunks" in self.last_query:
-            return [("# Policy Текст политики отпусков.",)]
-        return [("chunk-1", "# Policy Текст политики отпусков.")]
+            return [("# Policy\n\nТекст политики отпусков.",)]
+        return [("chunk-1", "# Policy\n\nТекст политики отпусков.")]
 
 
 class ExistingChangedCursor(FakeCursor):
@@ -109,7 +112,7 @@ def test_ingestion_uses_manifest_file_list(monkeypatch):
 
     assert inserted_count == 1
     assert len(cursor.inserted_chunks) == 1
-    assert cursor.inserted_chunks[0][2] == "# Included Нужный документ."
+    assert cursor.inserted_chunks[0][2] == "# Included\n\nНужный документ."
 
 
 def _run_ingestion(monkeypatch, docs_path: Path) -> int:
@@ -122,7 +125,9 @@ def _run_ingestion(monkeypatch, docs_path: Path) -> int:
 
     assert cursor.inserted_chunks
     chunk_params = cursor.inserted_chunks[0]
-    assert chunk_params[2] == "# Policy Текст политики отпусков."
+    # Fix #2: token splitter сохраняет оригинальный whitespace (newlines),
+    # а не сворачивает в " " как старый word-based " ".join(words).
+    assert chunk_params[2] == "# Policy\n\nТекст политики отпусков."
     assert chunk_params[5].startswith("[0.1,")
     return inserted_count
 
@@ -162,4 +167,4 @@ def test_ingestion_replaces_chunks_when_existing_document_changes(monkeypatch):
     assert inserted_count == 1
     assert cursor.deleted_document_ids == ["document-1"]
     assert cursor.inserted_chunks
-    assert cursor.inserted_chunks[0][2] == "# Policy Новый текст политики."
+    assert cursor.inserted_chunks[0][2] == "# Policy\n\nНовый текст политики."

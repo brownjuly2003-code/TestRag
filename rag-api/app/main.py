@@ -19,6 +19,7 @@ from .rag import (
     HybridRetriever,
     build_grounded_answer,
     confidence_from_results,
+    split_text,
     tokenize,
 )
 from .settings import get_settings
@@ -376,22 +377,6 @@ DOCUMENT_TYPES: dict[str, dict[str, Any]] = {
         "outline": ["Вопрос", "Факты", "Анализ", "Риски", "Вывод"],
     },
 }
-
-
-def split_text(text: str, chunk_size: int = 500, chunk_overlap: int = 50) -> list[str]:
-    words = text.split()
-    if not words:
-        return []
-
-    chunks = []
-    start = 0
-    while start < len(words):
-        end = min(start + chunk_size, len(words))
-        chunks.append(" ".join(words[start:end]))
-        if end == len(words):
-            break
-        start = max(0, end - chunk_overlap)
-    return chunks
 
 
 def detect_section(text: str) -> str | None:

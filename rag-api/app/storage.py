@@ -6,7 +6,7 @@ from typing import Any
 import psycopg
 from psycopg.types.json import Jsonb
 
-from .rag import DocumentChunk
+from .rag import DocumentChunk, split_text
 
 
 class PostgresStore:
@@ -31,7 +31,7 @@ class PostgresStore:
                 document_id = self._get_or_create_document(cursor, file_path)
                 text = file_path.read_text(encoding="utf-8")
                 section = _detect_section(text)
-                chunks = _split_text(text)
+                chunks = split_text(text)
                 cursor.execute(
                     "select content from document_chunks where document_id = %s order by chunk_index",
                     (document_id,),
@@ -437,22 +437,6 @@ class PostgresStore:
             )
             updated_count += 1
         return updated_count
-
-
-def _split_text(text: str, chunk_size: int = 500, chunk_overlap: int = 50) -> list[str]:
-    words = text.split()
-    if not words:
-        return []
-
-    chunks = []
-    start = 0
-    while start < len(words):
-        end = min(start + chunk_size, len(words))
-        chunks.append(" ".join(words[start:end]))
-        if end == len(words):
-            break
-        start = max(0, end - chunk_overlap)
-    return chunks
 
 
 def _detect_section(text: str) -> str | None:

@@ -27,7 +27,10 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-testrag}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-testrag}
       DOCS_PATH: ${DOCS_PATH:-/app/data/sample_docs}
       DOCS_MANIFEST_PATH: ${DOCS_MANIFEST_PATH:-}
-      MIN_CONFIDENCE: ${MIN_CONFIDENCE:-0.35}
+      # Fix #2: после перехода word→token splitter chunks стали меньше →
+      # confidence на 23pp ниже на тех же golden Q. Threshold 0.25 восстанавливает
+      # refusal_accuracy=1.0 без false-accepts на off-corpus Q9 (0.208).
+      MIN_CONFIDENCE: ${MIN_CONFIDENCE:-0.25}
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       MISTRAL_CHAT_MODEL: ${MISTRAL_CHAT_MODEL:-mistral-small-latest}
       MISTRAL_EMBEDDING_MODEL: ${MISTRAL_EMBEDDING_MODEL:-mistral-embed}

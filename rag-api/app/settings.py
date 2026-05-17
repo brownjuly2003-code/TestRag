@@ -25,7 +25,7 @@ def get_settings() -> Settings:
     return Settings(
         docs_path=Path(os.getenv("DOCS_PATH", str(_default_docs_path()))),
         docs_manifest_path=Path(docs_manifest_path) if docs_manifest_path else None,
-        min_confidence=float(os.getenv("MIN_CONFIDENCE", "0.35")),
+        min_confidence=float(os.getenv("MIN_CONFIDENCE", "0.25")),
         database_url=os.getenv("DATABASE_URL", ""),
         mistral_api_key=os.getenv("MISTRAL_API_KEY", ""),
         mistral_chat_model=os.getenv("MISTRAL_CHAT_MODEL", "mistral-small-latest"),
