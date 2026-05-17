@@ -227,6 +227,13 @@ column User.role does not exist
 
 **Fix path**: upgrade pinned n8n до версии, где typeorm-маппинг матчится с migrate'нутой schema. Требует regression-теста workflow с актуальным image.
 
+**Текущее решение (2026-05-17 night research)**: НЕ апгрейдим. Причины:
+1. **`column User.role` error устранён через ALTER TABLE alias** — оба пути (runtime webhook + CLI import) перестали ловить эту ошибку. Подтверждено: после ALTER `n8n import:workflow` отдаёт другую ошибку (`null value in column "active"`/`"versionId"`), не schema mismatch.
+2. **CLI import тебе и не нужен**: канонический n8n-export включает `createdAt`, `updatedAt`, `isArchived`, `versionId` (uuid), `triggerCount`, `meta`, `tags`, `staticData` — добавление в committed JSON загрязняет git (timestamps/versionId drift на каждом сохранении). SQL UPDATE workaround (`.tmp/update_workflow.sql`) **сохраняет webhook secret binding в workflow row**, CLI import сбрасывает.
+3. **Upgrade scope**: latest n8n = 2.21.3 (npm), pinned = 1.103.2 → 100+ minor versions разрыва. 1.x → 2.x = breaking changes. Внутри 1.x (1.104/1.105) — не подтверждено что починили User.role bug, потребует regression-смока на каждом step.
+
+**Когда пересматривать**: если (а) SQL UPDATE workaround станет узким местом (например, при scaling многих workflow), или (б) появится фича n8n >=1.105, нужная проекту, или (в) security CVE в 1.103.2.
+
 ## 18. ~~Sprint 6 #1 partial — HTTP nodes ещё читают `$env`~~ ✅ RESOLVED 2026-05-17 night
 
 **Был**: При `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` падали 4 TG HTTP-ноды (`Send Typing`, `Send Typing Followup`, `Edit Reply Markup`, `Send Answer`) — читали `$env.TELEGRAM_BOT_TOKEN` в URL. `RAG_API_URL` уже был hardcoded на `http://rag-api:8000` (закрыто Sprint 6 #1 ранее).

@@ -571,6 +571,53 @@ def test_expand_returns_full_chunk_content(monkeypatch):
     assert "<code>document_templates.md</code>" in body["text"]
 
 
+def test_expand_html_escapes_chunk_content(monkeypatch):
+    """Telegram parse_mode=HTML отвергает unescaped `<` и `&` в body text.
+    Chunks из normative-источников могут содержать markdown autolinks
+    `<https://...>` и аббревиатуры `M&A`, `P&L` — /expand обязан их escape'нуть.
+    """
+    store = FakeStore()
+    store.request_sources[("rl-html", 0)] = {
+        "chunk_id": "html-chunk:0",
+        "file": "external_normative.md",
+        "section": "M&A контекст",
+        "score": 0.9,
+    }
+
+    def runtime_with_html_chunk(_store):
+        chunks = [
+            DocumentChunk(
+                chunk_id="html-chunk:0",
+                content="См. <https://example.com/doc>. Финансы M&A и P&L.",
+                metadata={"file": "external_normative.md", "section": "M&A контекст"},
+            )
+        ]
+        return Runtime(
+            chunks=chunks,
+            retriever=HybridRetriever(chunks),
+            policy=AnswerPolicy(min_confidence=0.1),
+            llm=MistralChatClient("", "mistral-small-latest"),
+            embeddings=MistralEmbeddingClient("", "mistral-embed"),
+            store=_store,
+        )
+
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_html_chunk(store))
+
+    with TestClient(app) as client:
+        response = client.get("/expand", params={"request_log_id": "rl-html", "idx": 0})
+
+    assert response.status_code == 200
+    text = response.json()["text"]
+    # raw `<` и `&` должны быть заэскейплены
+    assert "<https://example.com/doc>" not in text
+    assert "&lt;https://example.com/doc&gt;" in text
+    assert "M&A" not in text.replace("M&amp;A", "")
+    assert "M&amp;A" in text
+    assert "P&amp;L" in text
+    # filename header — intentional `<code>` остаётся
+    assert "<code>external_normative.md</code>" in text
+
+
 def test_expand_returns_404_when_chunk_id_unknown(monkeypatch):
     store = FakeStore()
     store.request_sources[("rl-1", 0)] = {

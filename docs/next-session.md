@@ -37,7 +37,7 @@ HEAD будет на свежем коммите EOS-сессии 2026-05-17 nig
 - ✅ `📖 Развернуть expand` исправлен (root cause не race, а workflow bug): `Resolve Expand` (GET /expand) возвращает ExpandResponse без `chat_id`, `Send Direct Reply` падал на `chat_id is empty`. Вставлен Code-узел `Format Expand` между Resolve Expand и Send Direct Reply (вкорневой 33 узла, было 32). Smoke 6/6 ✓.
 - ✅ `scripts/seed_n8n_vars.py` — idempotent seed `TELEGRAM_BOT_TOKEN` в `n8n.variables` через docker exec psql. Используется при clean-DB onboarding.
 - ⏸ Sprint 6 #2 OpenAPI dump (если есть). #3-#5 closed (`881c5f2`, `470b692`, `b7812b9`).
-- ⏸ n8n upgrade за пределы 1.103.2 (issue #17) с regression-тестом workflow.
+- ⏸ n8n upgrade за пределы 1.103.2 (issue #17) — **исследовано 2026-05-17 night, deferred**. ALTER TABLE alias-колонка решила оба пути `User.role` (runtime + CLI). SQL UPDATE workaround сохраняет webhook secret binding. Upgrade пересматривать когда (а) scaling, (б) нужная фича в >=1.105, или (в) CVE.
 
 Перед работой:
 - Не выводить .env, токены, ключи в чат.

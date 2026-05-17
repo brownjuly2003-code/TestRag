@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import date
 from functools import lru_cache
+import html
 import json
 from pathlib import Path
 import time
@@ -965,8 +966,14 @@ def expand(request_log_id: str, idx: int = 0) -> ExpandResponse:
         raise HTTPException(status_code=404, detail="chunk not found in current index")
     file_name = source.get("file") or "(без имени файла)"
     section = source.get("section") or ""
-    header_section = f" · {section}" if section else ""
-    text = f"📖 <code>{file_name}</code>{header_section}\n\n{chunk.content}"
+    # Telegram parse_mode=HTML: чанк может содержать `<` (markdown autolinks
+    # `<https://...>` в корпусе normative-источников), `&` (M&A, P&L) — без
+    # escape sendMessage отдаёт 400 "can't parse entities".
+    safe_file = html.escape(file_name)
+    safe_section = html.escape(section)
+    safe_content = html.escape(chunk.content)
+    header_section = f" · {safe_section}" if safe_section else ""
+    text = f"📖 <code>{safe_file}</code>{header_section}\n\n{safe_content}"
     return ExpandResponse(
         text=text,
         chunk_id=chunk_id,
