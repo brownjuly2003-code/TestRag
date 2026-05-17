@@ -7,13 +7,13 @@
 ```text
 Продолжаем D:\TestRag.
 
-Состояние HEAD `74f45fd` (2026-05-17 night):
-- Sprint 4 retrieval polish + BCG demo bar + Sprint 5 cross-audit hardening — DONE.
-- pytest 112/112. Eval CI gate `pytest scripts/test_eval_regression.py` зелёный.
+Состояние HEAD `e983509` (2026-05-17, Sprint 6 +4 items):
+- Sprint 4 retrieval polish + BCG demo bar + Sprint 5 cross-audit hardening + Sprint 6 #2/#3/#4/#5 — DONE.
+- pytest 121/121. Eval CI gate `pytest scripts/test_eval_regression.py` зелёный, **71s → 29s после HTTP pooling**.
 - 10 golden Qs: MRR=0.76 Hit@1=0.67 Hit@5=0.89 refusal=1.00 avg_conf=0.85.
 - Корпус: MVP-47, chunk_count=189, documents=51.
-- Стек: FastAPI hybrid retrieval (BM25 + vector + section rerank, weights env) → Mistral → n8n (28 узлов, pin 1.103.2) → Telegram @AIagentJu_bot через cloudflared tunnel (URL ephemeral).
-- Sprint 5 закрыл P0/P1 из Kimi+Codex cross-audit: content enrichment glossary, eval CI gate, compose hardening (mandatory secrets, healthchecks, postgres expose-only), LLM guards (choice/JSON/dim mismatch), env-параметризованные hybrid weights.
+- Стек: FastAPI hybrid retrieval (BM25 + vector + section rerank, weights env, `/ask?debug=true` explainability) → Mistral (singleton httpx) → n8n (28 узлов, pin 1.103.2) → Telegram @AIagentJu_bot через cloudflared tunnel (URL ephemeral).
+- Sprint 5 закрыл P0/P1 из Kimi+Codex cross-audit. Sprint 6: empty-query fallback, retrieval explainability в /ask, HTTP client pooling, OpenAPI export + ADR.
 
 Документация:
 - README.md — value-prop + retrieval metrics table.
@@ -43,9 +43,13 @@ Sprint 6 backlog (если хочется продолжать):
 cd D:\TestRag
 
 # Pytest gate (быстрый, без живого API):
-python -m pytest -p no:schemathesis  # 112 passed
+python -m pytest -p no:schemathesis  # 121 passed
 
-# Eval CI regression gate (требует rag-api up, ~1.5 минуты):
+# OpenAPI contract gate (включён в общий pytest, ловит schema drift):
+python -m pytest -p no:schemathesis rag-api/tests/test_openapi_contract.py  # 4 passed
+# При расхождении: python scripts/export_openapi.py → commit docs/openapi.yaml.
+
+# Eval CI regression gate (требует rag-api up, ~30 секунд после HTTP pooling):
 python -m pytest -p no:schemathesis scripts/test_eval_regression.py  # 7 passed
 
 # Поднять стек (postgres expose-only, rag-api healthcheck, n8n 1.103.2):
