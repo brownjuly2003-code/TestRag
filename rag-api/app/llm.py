@@ -33,10 +33,22 @@ class MistralChatClient:
     def __init__(self, api_key: str, model: str) -> None:
         self.api_key = api_key
         self.model = model
+        # Sprint 6 #5 (codex-audit MISSED#8.3): singleton AsyncClient вместо
+        # per-request new socket — переиспользует TCP/TLS handshake.
+        self._async_client: httpx.AsyncClient | None = None
 
     @property
     def enabled(self) -> bool:
         return bool(self.api_key)
+
+    def _get_async_client(self) -> httpx.AsyncClient:
+        if self._async_client is None or self._async_client.is_closed:
+            self._async_client = httpx.AsyncClient(timeout=30)
+        return self._async_client
+
+    async def aclose(self) -> None:
+        if self._async_client is not None and not self._async_client.is_closed:
+            await self._async_client.aclose()
 
     async def answer(
         self, question: str, results: list[SearchResult]
@@ -76,14 +88,14 @@ class MistralChatClient:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.post(
-                    "https://api.mistral.ai/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {self.api_key}"},
-                    json=payload,
-                )
-                response.raise_for_status()
-                data = response.json()
+            client = self._get_async_client()
+            response = await client.post(
+                "https://api.mistral.ai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
         except httpx.HTTPError as exc:
             logger.warning("mistral.chat http_error endpoint=chat/completions error=%s", exc)
             return None, usage
@@ -113,14 +125,14 @@ class MistralChatClient:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.post(
-                    "https://api.mistral.ai/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {self.api_key}"},
-                    json=payload,
-                )
-                response.raise_for_status()
-                data = response.json()
+            client = self._get_async_client()
+            response = await client.post(
+                "https://api.mistral.ai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
         except httpx.HTTPError as exc:
             logger.warning("mistral.doc_plan http_error error=%s", exc)
             return None
@@ -141,10 +153,22 @@ class MistralEmbeddingClient:
         # Sprint 5 #4 (codex-audit#6.2): pin embedding dim после первого успешного вызова —
         # подменили модель → log warning при первом несовпадении.
         self._observed_dim: int | None = None
+        # Sprint 6 #5: singleton AsyncClient для embed_query hot-path в /ask.
+        # embed_texts (sync) остаётся per-call — вызывается только в ingest на startup.
+        self._async_client: httpx.AsyncClient | None = None
 
     @property
     def enabled(self) -> bool:
         return bool(self.api_key)
+
+    def _get_async_client(self) -> httpx.AsyncClient:
+        if self._async_client is None or self._async_client.is_closed:
+            self._async_client = httpx.AsyncClient(timeout=30)
+        return self._async_client
+
+    async def aclose(self) -> None:
+        if self._async_client is not None and not self._async_client.is_closed:
+            await self._async_client.aclose()
 
     @property
     def observed_dim(self) -> int | None:
@@ -200,14 +224,14 @@ class MistralEmbeddingClient:
 
         payload = {"model": self.model, "input": text}
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.post(
-                    "https://api.mistral.ai/v1/embeddings",
-                    headers={"Authorization": f"Bearer {self.api_key}"},
-                    json=payload,
-                )
-                response.raise_for_status()
-                data = response.json()
+            client = self._get_async_client()
+            response = await client.post(
+                "https://api.mistral.ai/v1/embeddings",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
         except httpx.HTTPError as exc:
             logger.warning("mistral.embed_query http_error error=%s", exc)
             return None

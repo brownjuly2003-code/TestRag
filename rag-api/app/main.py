@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import date
 from functools import lru_cache
 import json
 from pathlib import Path
 import time
-from typing import Any
+from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -24,7 +25,22 @@ from .settings import get_settings
 from .storage import PostgresStore
 
 
-app = FastAPI(title="TestRag RAG API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Sprint 6 #5: graceful close singleton httpx clients на shutdown."""
+    yield
+    # `get_runtime` может быть @lru_cache функцией (prod) или lambda (tests via monkeypatch).
+    # Не материализуем runtime если не было ни одного запроса — иначе создадим лишний инстанс.
+    cache_info = getattr(get_runtime, "cache_info", None)
+    if cache_info is None or cache_info().currsize > 0:
+        runtime = get_runtime()
+        for attr in ("llm", "embeddings"):
+            closer = getattr(getattr(runtime, attr, None), "aclose", None)
+            if callable(closer):
+                await closer()
+
+
+app = FastAPI(title="TestRag RAG API", version="0.1.0", lifespan=lifespan)
 
 
 @dataclass(frozen=True)
