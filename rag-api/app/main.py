@@ -679,9 +679,16 @@ def feedback(request: FeedbackRequest) -> dict[str, str]:
         free_text=request.free_text,
     )
     if request.rating == "bad":
+        context: list[dict[str, Any]] = []
+        if request.category == "human" and request.telegram_user_id:
+            context = runtime.store.recent_requests(
+                telegram_user_id=request.telegram_user_id,
+                limit=5,
+            )
         runtime.store.enqueue_review(
             request_log_id=request.request_log_id,
             reason=request.category or request.comment or "bad_feedback",
+            context=context,
         )
     return {"status": "accepted"}
 

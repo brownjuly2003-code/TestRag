@@ -63,3 +63,5 @@ create table if not exists review_queue (
     status text not null default 'new',
     created_at timestamptz not null default now()
 );
+
+alter table review_queue add column if not exists context jsonb not null default '[]'::jsonb;

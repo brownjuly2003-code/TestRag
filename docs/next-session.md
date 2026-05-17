@@ -31,17 +31,17 @@
 
 Что осталось (Sprint 3, по приоритету):
 
-1. ✅ **N1 follow-up question buttons** — DONE (uncommitted). Реализация выше. TG live smoke остаётся юзеру: задать вопрос → дождаться ответа с 2 follow-up + 2 feedback кнопками → нажать «📎 Подробнее: …» → проверить что бот формирует новый вопрос «Расскажи подробнее про раздел … документа …» и присылает второй ответ с новой клавиатурой.
+1. ✅ **N1 follow-up question buttons** — DONE (commit `800b127`). E2E smoke `.tmp/smoke_followup.py` зелёный.
 
-2. **N3 Human handover**: feedback:bad_human уже пишет category='human' + review_queue. Добавить:
-   - Last 5 messages user'а → review_queue.context (новый jsonb column).
-   - Confirmation user'у: «Ваш запрос направлен HR/Legal на ручную обработку».
+2. ✅ **N3 Human handover** — DONE. `alter review_queue add column context jsonb`. /feedback при category=human тянет last 5 messages → context. Format Feedback узел показывает «Ваш запрос направлен HR/Legal на ручную обработку» вместо «Оценка принята.». Live smoke: `curl POST /feedback {category:human}` → `select reason, jsonb_array_length(context) from review_queue` → `human|5`.
 
-3. **N4 Conversation threading**: thread_id в n8n (reply-to-message), prev 3 QA в retrieval.
+3. ✅ **N4 Conversation threading** — частично DONE (reply_to_message_id). Whitelist выставляет user_message_id из message.message_id (или callback_query.message.message_id). Format Answer первая часть `reply_to_message_id`=user_message_id, остальные null. Send Answer HTTP body + Send Answer Part Telegram-node параметр `replyToMessageId`. Prev-3-QA-в-retrieval отложено (риск сбить hybrid retrieval без A/B).
 
 4. **N2 Quick-actions**: «Уточнить» (top_k=10 rerun), «Развернуть» (full chunk).
 
 5. **Retrieval regression** (документировано в docs/findings/2026-05-17-retrieval-aviation-pollution.md): aviation-pass переписал ВСЕ 200 файлов под авиа, включая HR-шаблоны. Теперь controlled-zone Q даёт top=02_hr_tmp_employment_contract.md score 0.937 вместо 01_hr_pol_safety. 4 варианта fix описаны там. Решение: пока документировать как known limitation демо (Mistral собирает корректный ответ из «не тех» source); Sprint 4 retrieval polish.
+
+6. **Backlog: prev-N-QA в retrieval query** (was N4 part 2). Идея: расширить /ask payload `recent_questions[]` или server-side тянуть last 3 QA для user → конкатить в query текст перед embedding. Риск: сбивает hybrid BM25 hit на основном вопросе. Нужен ablation A/B на golden-questions перед merge.
 
 Sprint 2 TG-смок (если ещё не пробовала после `daa8795`):
 1. `/help` → HTML список команд + примеры.

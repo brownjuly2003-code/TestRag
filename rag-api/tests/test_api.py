@@ -74,10 +74,6 @@ class FakeStore:
         self.feedback.append(kwargs)
         return "feedback-1"
 
-    def enqueue_review(self, **kwargs):
-        self.review_queue.append(kwargs)
-        return "review-1"
-
     def recent_requests(self, telegram_user_id, limit=5):
         self.history_calls.append({"telegram_user_id": telegram_user_id, "limit": limit})
         return [
@@ -96,6 +92,15 @@ class FakeStore:
 
     def get_request_source(self, request_log_id, idx):
         return self.request_sources.get((request_log_id, idx))
+
+    # Override enqueue_review to capture context arg (N3)
+    def enqueue_review(self, request_log_id=None, reason=None, context=None):
+        self.review_queue.append({
+            "request_log_id": request_log_id,
+            "reason": reason,
+            "context": context,
+        })
+        return "review-1"
 
 
 class FakeDocumentPlanner:
@@ -285,6 +290,51 @@ def test_docs_summary_endpoint_groups_by_category(monkeypatch):
     labels = {c["category"]: c["label"] for c in body["categories"]}
     assert labels["01_hr_pol"] == "HR — политики и регламенты"
     assert labels["07_faq"] == "FAQ — частые вопросы"
+
+
+def test_human_handover_captures_last_5_messages_into_review_context(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/feedback",
+            json={
+                "request_log_id": "request-1",
+                "telegram_user_id": "42",
+                "rating": "bad",
+                "category": "human",
+            },
+        )
+
+    assert response.status_code == 200
+    written = store.review_queue[0]
+    assert written["reason"] == "human"
+    assert isinstance(written["context"], list)
+    assert len(written["context"]) >= 1
+    assert written["context"][0]["question"] == "Что такое controlled zone?"
+    # history fetched once for context
+    assert any(call["telegram_user_id"] == "42" for call in store.history_calls)
+
+
+def test_non_human_bad_feedback_writes_empty_context(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/feedback",
+            json={
+                "request_log_id": "request-1",
+                "telegram_user_id": "42",
+                "rating": "bad",
+                "category": "inaccurate",
+            },
+        )
+
+    assert response.status_code == 200
+    written = store.review_queue[0]
+    assert written["context"] == []
 
 
 def test_followup_returns_question_with_section_and_file(monkeypatch):

@@ -495,6 +495,98 @@ def test_format_docs_renders_categories_with_total():
     assert "• FAQ — 8" in text
 
 
+def _run_format_feedback(category: str | None, chat_id: int = 42) -> dict:
+    nodes = _load_nodes()
+    code = nodes["Format Feedback"]["parameters"]["jsCode"]
+    script = f"""
+const $node = {{ Whitelist: {{ json: {{ chat_id: {chat_id}, category: {json.dumps(category)} }} }} }};
+const $json = {{}};
+const result = new Function('$json', '$node', {json.dumps(code)})($json, $node);
+console.log(JSON.stringify(result[0].json));
+"""
+    result = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
+    return json.loads(result.stdout)
+
+
+def test_format_feedback_emits_default_text_for_inaccurate_category():
+    out = _run_format_feedback("inaccurate")
+    assert out["text"] == "Оценка принята."
+
+
+def test_format_feedback_emits_human_handover_text_for_human_category():
+    out = _run_format_feedback("human")
+    assert "HR/Legal" in out["text"]
+    assert "ручную обработку" in out["text"]
+
+
+def test_format_feedback_emits_default_text_when_category_missing():
+    out = _run_format_feedback(None)
+    assert out["text"] == "Оценка принята."
+
+
+def test_whitelist_captures_user_message_id_from_message():
+    body = _run_whitelist({"message": {"text": "Что такое controlled zone?", "chat": {"id": 42}, "from": {"id": 42}, "message_id": 1001}})
+    assert body["user_message_id"] == 1001
+
+
+def test_whitelist_captures_user_message_id_from_callback_query():
+    body = _run_whitelist(
+        {
+            "callback_query": {
+                "data": "feedback:good:request-1",
+                "from": {"id": 42},
+                "message": {"chat": {"id": 42}, "message_id": 777},
+            }
+        }
+    )
+    assert body["user_message_id"] == 777
+
+
+def test_format_answer_first_part_carries_reply_to_message_id():
+    nodes = _load_nodes()
+    code = nodes["Format Answer"]["parameters"]["jsCode"]
+    script = f"""
+const $node = {{ Whitelist: {{ json: {{ chat_id: 42, user_message_id: 1234 }} }} }};
+const $json = {json.dumps({"answer": "Параграф.\\n\\n" * 400, "request_log_id": "rl-1", "sources": []})};
+const result = new Function('$json', '$node', {json.dumps(code)})($json, $node);
+console.log(JSON.stringify(result));
+"""
+    result = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
+    items = [item["json"] for item in json.loads(result.stdout)]
+    assert len(items) >= 2
+    assert items[0]["reply_to_message_id"] == 1234
+    for it in items[1:]:
+        assert it["reply_to_message_id"] is None
+
+
+def test_format_answer_single_part_has_reply_to_message_id():
+    nodes = _load_nodes()
+    code = nodes["Format Answer"]["parameters"]["jsCode"]
+    script = f"""
+const $node = {{ Whitelist: {{ json: {{ chat_id: 42, user_message_id: 2222 }} }} }};
+const $json = {json.dumps({"answer": "Короткий ответ.", "request_log_id": "rl-1", "sources": []})};
+const result = new Function('$json', '$node', {json.dumps(code)})($json, $node);
+console.log(JSON.stringify(result));
+"""
+    result = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
+    items = [item["json"] for item in json.loads(result.stdout)]
+    assert len(items) == 1
+    assert items[0]["reply_to_message_id"] == 2222
+
+
+def test_send_answer_http_body_includes_reply_to_message_id():
+    nodes = _load_nodes()
+    body = nodes["Send Answer"]["parameters"]["jsonBody"]
+    assert "reply_to_message_id: $json.reply_to_message_id" in body
+
+
+def test_send_answer_part_uses_reply_to_message_id():
+    nodes = _load_nodes()
+    additional = nodes["Send Answer Part"]["parameters"]["additionalFields"]
+    assert "replyToMessageId" in additional
+    assert "$json.reply_to_message_id" in additional["replyToMessageId"]
+
+
 def test_followup_callback_parses_to_followup_request_event():
     body = _run_whitelist(
         {

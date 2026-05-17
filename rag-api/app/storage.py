@@ -269,7 +269,12 @@ class PostgresStore:
         entry = sources[idx]
         return entry if isinstance(entry, dict) else None
 
-    def enqueue_review(self, request_log_id: str | None, reason: str) -> str | None:
+    def enqueue_review(
+        self,
+        request_log_id: str | None,
+        reason: str,
+        context: list[dict[str, Any]] | None = None,
+    ) -> str | None:
         if not self.enabled or not request_log_id:
             return None
 
@@ -277,11 +282,11 @@ class PostgresStore:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                insert into review_queue (request_log_id, reason)
-                values (%s, %s)
+                insert into review_queue (request_log_id, reason, context)
+                values (%s, %s, %s)
                 returning id::text
                 """,
-                (request_log_id, reason),
+                (request_log_id, reason, Jsonb(context or [])),
             )
             row = cursor.fetchone()
         return row[0] if row else None
