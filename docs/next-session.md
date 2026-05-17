@@ -34,10 +34,10 @@ HEAD будет на свежем коммите EOS-сессии 2026-05-17 nig
 - ✅ **Sprint 6 #1 закрыт (issue #18)**: 4 TG HTTP-ноды переключены с `$env.TELEGRAM_BOT_TOKEN` на `$vars.TELEGRAM_BOT_TOKEN`. Переменная инсертится в `n8n.variables` напрямую через SQL (UI create gated на license, но read-path в CE работает без license-check). `N8N_BLOCK_ENV_ACCESS_IN_NODE=true` дефолт восстановлен. Smoke 5/6 ✓ (тот же baseline). Подход через `predefinedCredentialType + $credentials` исключён (n8n фильтрует credentials по `has:authenticate`, у `telegramApi` его нет).
 
 Что НЕ закрыто (на следующую сессию):
+- ✅ `📖 Развернуть expand` исправлен (root cause не race, а workflow bug): `Resolve Expand` (GET /expand) возвращает ExpandResponse без `chat_id`, `Send Direct Reply` падал на `chat_id is empty`. Вставлен Code-узел `Format Expand` между Resolve Expand и Send Direct Reply (вкорневой 33 узла, было 32). Smoke 6/6 ✓.
+- ✅ `scripts/seed_n8n_vars.py` — idempotent seed `TELEGRAM_BOT_TOKEN` в `n8n.variables` через docker exec psql. Используется при clean-DB onboarding.
 - ⏸ Sprint 6 #2 OpenAPI dump (если есть). #3-#5 closed (`881c5f2`, `470b692`, `b7812b9`).
-- ⏸ Investigate `📖 Развернуть expand` race в TG smoke (single failure из 6). Возможно scripts/smoke_tg_e2e.py не дожидается reply2.id refresh после clarify click.
 - ⏸ n8n upgrade за пределы 1.103.2 (issue #17) с regression-тестом workflow.
-- ⏸ `scripts/seed_n8n_vars.py` — автоматизация seed `TELEGRAM_BOT_TOKEN` в `n8n.variables` для clean-DB onboarding (см. known-issues #18 fix section). Сейчас ручной шаг при reset.
 
 Перед работой:
 - Не выводить .env, токены, ключи в чат.
@@ -57,14 +57,7 @@ docker ps --format "table {{.Names}}\t{{.Status}}"
 curl http://localhost:8000/health   # chunk_count=583 expected
 
 # 0.5. Seed n8n variable TELEGRAM_BOT_TOKEN (нужно при clean n8n DB, иначе $vars.X пустой → TG 404)
-python -c "
-import os, pathlib, re, uuid
-token = re.search(r'TELEGRAM_BOT_TOKEN=(\S+)', pathlib.Path('.env').read_text(encoding='utf-8')).group(1)
-sql = f\"INSERT INTO n8n.variables (id, key, type, value) VALUES ('{uuid.uuid4()}', 'TELEGRAM_BOT_TOKEN', 'string', '{token}') ON CONFLICT (key) WHERE \\\"projectId\\\" IS NULL DO UPDATE SET value=EXCLUDED.value;\"
-pathlib.Path('.tmp/seed_var.sql').write_text(sql, encoding='utf-8')
-"
-docker cp .tmp/seed_var.sql testrag-postgres-1:/tmp/seed_var.sql
-MSYS_NO_PATHCONV=1 docker exec testrag-postgres-1 psql -U testrag -d testrag -f //tmp/seed_var.sql
+python scripts/seed_n8n_vars.py
 
 # 1. Cloudflared tunnel (ephemeral — нужно при каждом session start)
 docker rm -f testrag-cloudflared 2>/dev/null
@@ -138,9 +131,10 @@ POSTGRES_PASSWORD и N8N_ENCRYPTION_KEY — `${VAR:?required}`.
 - **Корпус** — `corpus/*.md` (200 файлов + external_tk_rf_chapter_11.md). MVP — `manifests/MVP_CORPUS_FILES.txt` (48 файлов).
 - **rag-api** — `rag-api/app/{main,rag,storage,llm,settings,tg_classifier,tg_copy,multiturn,prompts}.py`.
 - **Тесты** — `rag-api/tests/test_{api,rag,llm,n8n_workflow,openapi_contract,ingestion,tg_classifier,multiturn}.py` (192/192).
-- **n8n workflow** — `n8n/workflows/hr-legal-rag-workflow.json` (32 узла).
+- **n8n workflow** — `n8n/workflows/hr-legal-rag-workflow.json` (33 узла, +Format Expand 2026-05-17 night fix).
 - **Eval** — `scripts/eval_retrieval.py` (10 single-turn golden Qs), `scripts/eval_multiturn.py` (5 multi-turn A/B), `scripts/test_eval_regression.py` (pytest gate), `eval/baseline.json` (overlap=75 + min_conf=0.25 closed).
 - **Smoke** — `scripts/smoke_tg_e2e.py` (N1/N2/N3/N4 buttons), `scripts/smoke_followup.py`.
+- **n8n var seed** — `scripts/seed_n8n_vars.py` (idempotent insert TELEGRAM_BOT_TOKEN в `n8n.variables`).
 - **Cross-audit** — `kimi_audit_17_05_26.md` (Kimi полный аудит).
 - **Findings** — `docs/findings/2026-05-17-{sprint4-retrieval-polish,prev-n-qa-ablation,overlap-50-regression}.md`.
 - **Known issues** — `docs/known-issues.md` (19 issues, #14/#16/#18 RESOLVED, #17/#19 NEW/known).

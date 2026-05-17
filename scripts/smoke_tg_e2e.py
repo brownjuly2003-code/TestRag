@@ -145,7 +145,9 @@ async def main() -> int:
             print("    WARN: 🔁 button missing — skipping", file=sys.stderr)
             reply_clarify = reply1
 
-        # Step 2.7: click 📖 Развернуть на свежем reply (или fallback на reply1)
+        # Step 2.7: click 📖 Развернуть на свежем reply (или fallback на reply1).
+        # Expand reply — leaf-сообщение без keyboard (Send Direct Reply, plain HTML),
+        # поэтому для followup-шага продолжаем работать с оригинальным reply1.
         anchor = reply_clarify or reply1
         expand_data = await click_button_by_prefix(anchor, "expand:")
         if expand_data:
@@ -155,8 +157,6 @@ async def main() -> int:
                 snippet = (reply_expand.message or "")[:140].replace("\n", " ")
                 print(f"    BOT expand reply msg_id={reply_expand.id}: {snippet}")
                 print("    ✓ N2: chunk expanded")
-                # обновляем reply1 на свежее сообщение чтобы followup попал в актуальный keyboard
-                reply1 = reply_expand
             else:
                 print("    ✗ N2: expand reply timeout", file=sys.stderr)
         else:

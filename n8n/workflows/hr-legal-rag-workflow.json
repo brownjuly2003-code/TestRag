@@ -726,6 +726,19 @@
         1000,
         -100
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.text || 'Не удалось получить содержимое раздела.';\nreturn [{ json: { chat_id: $node['Whitelist'].json.chat_id, text } }];\n"
+      },
+      "id": "format-expand",
+      "name": "Format Expand",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        -100
+      ]
     }
   ],
   "connections": {
@@ -1075,6 +1088,17 @@
       ]
     },
     "Resolve Expand": {
+      "main": [
+        [
+          {
+            "node": "Format Expand",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Expand": {
       "main": [
         [
           {

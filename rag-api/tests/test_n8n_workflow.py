@@ -671,21 +671,30 @@ def test_clarify_branch_routes_through_resolve_to_format_answer():
     assert "$node['Whitelist'].json.request_log_id" in resolve["parameters"]["url"]
 
 
-def test_expand_branch_routes_through_resolve_to_send_direct_reply():
-    """Sprint 6 #6: expand → /expand (GET) → Send Direct Reply (parse_mode HTML)."""
+def test_expand_branch_routes_through_resolve_and_format_to_send_direct_reply():
+    """Sprint 6 #6: expand → /expand (GET) → Format Expand (chat_id injection) → Send Direct Reply.
+
+    Без Format Expand: ExpandResponse JSON содержит только {text, chunk_id, file, section},
+    Send Direct Reply читает $json.chat_id и падает с TG 400 'chat_id is empty'.
+    """
     workflow = _load_workflow()
     nodes = {n["name"]: n for n in workflow["nodes"]}
-    for required in ["Expand?", "Resolve Expand"]:
+    for required in ["Expand?", "Resolve Expand", "Format Expand"]:
         assert required in nodes, f"missing {required}"
     assert workflow["connections"]["Expand?"]["main"][0][0]["node"] == "Resolve Expand"
     assert workflow["connections"]["Expand?"]["main"][1][0]["node"] == "Direct Reply?"
-    assert workflow["connections"]["Resolve Expand"]["main"][0][0]["node"] == "Send Direct Reply"
+    assert workflow["connections"]["Resolve Expand"]["main"][0][0]["node"] == "Format Expand"
+    assert workflow["connections"]["Format Expand"]["main"][0][0]["node"] == "Send Direct Reply"
     resolve = nodes["Resolve Expand"]
     assert resolve["type"] == "n8n-nodes-base.httpRequest"
     assert resolve["parameters"]["method"] == "GET"
     assert "/expand" in resolve["parameters"]["url"]
     assert "$node['Whitelist'].json.request_log_id" in resolve["parameters"]["url"]
     assert "$node['Whitelist'].json.followup_idx" in resolve["parameters"]["url"]
+    fmt = nodes["Format Expand"]
+    assert fmt["type"] == "n8n-nodes-base.code"
+    assert "$node['Whitelist'].json.chat_id" in fmt["parameters"]["jsCode"]
+    assert "$json.text" in fmt["parameters"]["jsCode"]
 
 
 def test_resolve_followup_node_calls_followup_endpoint_with_whitelist_params():
