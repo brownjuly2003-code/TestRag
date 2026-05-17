@@ -5,6 +5,7 @@ from datetime import date
 from functools import lru_cache
 import json
 from pathlib import Path
+import time
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -48,6 +49,10 @@ class Source(BaseModel):
     date: str | None = None
     source_url: str | None = None
     score: float
+    version: str | None = None
+    effective_from: str | None = None
+    effective_to: str | None = None
+    status: str | None = None
 
 
 class AskResponse(BaseModel):
@@ -57,6 +62,10 @@ class AskResponse(BaseModel):
     refused: bool
     request_type: str
     sources: list[Source]
+    # Sprint 4 prep — formalized retrieval contract:
+    status: str  # answerable | unanswerable | needs_human_review
+    effective_date_max: str | None = None
+    latency_ms: int | None = None
 
 
 class FeedbackRequest(BaseModel):
@@ -90,6 +99,17 @@ class CorpusCategory(BaseModel):
 class CorpusSummaryResponse(BaseModel):
     categories: list[CorpusCategory]
     total_docs: int
+
+
+class MetricsResponse(BaseModel):
+    window_hours: int
+    total_requests: int
+    refusal_rate: float
+    avg_latency_ms: float | None = None
+    avg_confidence: float | None = None
+    avg_prompt_tokens: float | None = None
+    avg_completion_tokens: float | None = None
+    bad_feedback_rate: float
 
 
 class FollowupSource(BaseModel):
@@ -590,9 +610,34 @@ def to_sources(results: list[Any]) -> list[Source]:
                 date=metadata.get("date"),
                 source_url=metadata.get("source_url"),
                 score=round(result.final_score, 4),
+                version=metadata.get("version"),
+                effective_from=metadata.get("effective_from"),
+                effective_to=metadata.get("effective_to"),
+                status=metadata.get("status"),
             )
         )
     return sources
+
+
+def derive_status(refused: bool, confidence: float, sources: list[Source]) -> str:
+    """Formalized retrieval contract status. Sprint 4 prep (critique #1).
+
+    - 'unanswerable': refused (no sources OR confidence below policy).
+    - 'needs_human_review': low confidence on the upper edge (0.20-0.35) OR all sources в 'draft' status.
+    - 'answerable': прошёл оба guard'а.
+    """
+    if refused:
+        return "unanswerable"
+    if confidence < 0.35 + 1e-6:
+        return "needs_human_review"
+    if sources and all((s.status or "active") == "draft" for s in sources):
+        return "needs_human_review"
+    return "answerable"
+
+
+def latest_effective_date(sources: list[Source]) -> str | None:
+    dates = [s.effective_from for s in sources if s.effective_from]
+    return max(dates) if dates else None
 
 
 def to_document_sources(results: list[Any]) -> list[DocumentSource]:
@@ -630,6 +675,7 @@ def health() -> dict[str, Any]:
 @app.post("/ask", response_model=AskResponse)
 async def ask(request: AskRequest) -> AskResponse:
     runtime = get_runtime()
+    t0 = time.perf_counter()
     query_embedding = await runtime.embeddings.embed_query(request.question)
     results = runtime.retriever.search(request.question, top_k=request.top_k, query_embedding=query_embedding)
     confidence = confidence_from_results(results)
@@ -637,15 +683,18 @@ async def ask(request: AskRequest) -> AskResponse:
     request_type = classify_request(request.question)
 
     refused = not runtime.policy.can_answer(confidence=confidence, source_count=len(sources))
+    usage: dict[str, Any] = {"model": None, "prompt_tokens": None, "completion_tokens": None}
     if refused:
         answer = "Не хватает надежных источников для ответа. Уточните вопрос или добавьте документ в базу знаний."
     else:
-        mistral_answer = await runtime.llm.answer(request.question, results)
+        mistral_answer, usage = await runtime.llm.answer(request.question, results)
         answer = mistral_answer or build_grounded_answer(request.question, results)
         if mistral_answer and is_pure_refusal(mistral_answer):
             refused = True
             confidence = 0.0
 
+    latency_ms = int((time.perf_counter() - t0) * 1000)
+    status = derive_status(refused, confidence, sources)
     request_log_id = runtime.store.log_request(
         telegram_user_id=request.telegram_user_id,
         question=request.question,
@@ -654,6 +703,10 @@ async def ask(request: AskRequest) -> AskResponse:
         refused=refused,
         answer=answer,
         sources=[source.model_dump() for source in sources],
+        latency_ms=latency_ms,
+        llm_model=usage.get("model"),
+        prompt_tokens=usage.get("prompt_tokens"),
+        completion_tokens=usage.get("completion_tokens"),
     )
     return AskResponse(
         request_log_id=request_log_id,
@@ -662,6 +715,9 @@ async def ask(request: AskRequest) -> AskResponse:
         refused=refused,
         request_type=request_type,
         sources=sources,
+        status=status,
+        effective_date_max=latest_effective_date(sources),
+        latency_ms=latency_ms,
     )
 
 
@@ -732,6 +788,15 @@ def followup(request_log_id: str, idx: int = 0) -> FollowupResponse:
             score=source.get("score"),
         ),
     )
+
+
+@app.get("/metrics", response_model=MetricsResponse)
+def metrics(window_hours: int = 168) -> MetricsResponse:
+    if window_hours <= 0 or window_hours > 24 * 90:
+        raise HTTPException(status_code=400, detail="window_hours must be in (0, 2160]")
+    runtime = get_runtime()
+    raw = runtime.store.metrics(window_hours=window_hours)
+    return MetricsResponse(**raw)
 
 
 @app.get("/docs/summary", response_model=CorpusSummaryResponse)

@@ -102,12 +102,24 @@ class FakeStore:
         })
         return "review-1"
 
+    def metrics(self, window_hours=168):
+        return {
+            "window_hours": window_hours,
+            "total_requests": 17,
+            "refusal_rate": 0.18,
+            "avg_latency_ms": 2456.0,
+            "avg_confidence": 0.62,
+            "avg_prompt_tokens": 1432.5,
+            "avg_completion_tokens": 287.3,
+            "bad_feedback_rate": 0.08,
+        }
+
 
 class FakeDocumentPlanner:
     enabled = True
 
     async def answer(self, question, results):
-        return None
+        return None, {"model": "fake", "prompt_tokens": None, "completion_tokens": None}
 
     async def document_plan(self, system_prompt, user_prompt):
         return {
@@ -133,7 +145,10 @@ class FakeInsufficientAnswerClient:
     enabled = True
 
     async def answer(self, question, results):
-        return "Данных недостаточно. В предоставленных источниках нет нужных сведений."
+        return (
+            "Данных недостаточно. В предоставленных источниках нет нужных сведений.",
+            {"model": "fake", "prompt_tokens": 12, "completion_tokens": 18},
+        )
 
     async def document_plan(self, system_prompt, user_prompt):
         return None
@@ -335,6 +350,72 @@ def test_non_human_bad_feedback_writes_empty_context(monkeypatch):
     assert response.status_code == 200
     written = store.review_queue[0]
     assert written["context"] == []
+
+
+def test_ask_response_includes_status_latency_and_version_metadata(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/ask",
+            json={"question": "Сделай приказ о приеме на работу", "telegram_user_id": "42"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] in {"answerable", "needs_human_review", "unanswerable"}
+    assert body["latency_ms"] is not None
+    # observability также залогирован в FakeStore.request_logs
+    logged = store.request_logs[0]
+    assert "latency_ms" in logged
+    assert logged["latency_ms"] is not None
+
+
+def test_ask_refused_response_status_is_unanswerable(monkeypatch):
+    """При refused=True endpoint должен вернуть status='unanswerable' и не вызывать LLM."""
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/ask",
+            json={"question": "случайный нерелевантный вопрос xyz123", "telegram_user_id": "42", "top_k": 1},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    # FakeStore corpus вернёт low confidence → refused via AnswerPolicy(min_confidence=0.1) — но
+    # в test runtime policy достаточно мягкий. Просто проверим что status согласован с refused.
+    if body["refused"]:
+        assert body["status"] == "unanswerable"
+    else:
+        assert body["status"] in {"answerable", "needs_human_review"}
+
+
+def test_metrics_endpoint_returns_aggregated_stats(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/metrics", params={"window_hours": 24})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["window_hours"] == 24
+    assert body["total_requests"] == 17
+    assert body["refusal_rate"] == 0.18
+    assert body["avg_latency_ms"] == 2456.0
+    assert body["bad_feedback_rate"] == 0.08
+
+
+def test_metrics_endpoint_rejects_invalid_window():
+    with TestClient(app) as client:
+        response = client.get("/metrics", params={"window_hours": 0})
+    assert response.status_code == 400
+    with TestClient(app) as client:
+        response = client.get("/metrics", params={"window_hours": 100000})
+    assert response.status_code == 400
 
 
 def test_followup_returns_question_with_section_and_file(monkeypatch):

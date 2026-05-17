@@ -65,3 +65,16 @@ create table if not exists review_queue (
 );
 
 alter table review_queue add column if not exists context jsonb not null default '[]'::jsonb;
+
+-- Sprint 4 prep (2026-05-17): versioning metadata для документов (HR/legal требование актуальности нормы).
+alter table documents add column if not exists version text not null default 'v1';
+alter table documents add column if not exists effective_from date;
+alter table documents add column if not exists effective_to date;
+alter table documents add column if not exists status text not null default 'active'
+    check (status in ('active', 'superseded', 'draft'));
+
+-- Observability: latency, tokens, model для каждого /ask запроса.
+alter table request_logs add column if not exists latency_ms integer;
+alter table request_logs add column if not exists llm_model text;
+alter table request_logs add column if not exists prompt_tokens integer;
+alter table request_logs add column if not exists completion_tokens integer;

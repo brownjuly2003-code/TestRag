@@ -174,7 +174,8 @@ class HybridRetriever:
                 vector_score = (cosine_similarity(query_embedding or [], chunk.embedding) + 1) / 2
             coverage = len(query_terms.intersection(self.term_frequencies[index])) / len(query_terms)
             base_score = (0.65 * normalized_bm25 + 0.35 * vector_score) if has_vector else normalized_bm25
-            final_score = base_score * coverage * coverage
+            section_boost = self._section_boost(query_terms, chunk)
+            final_score = base_score * coverage * coverage * (1.0 + section_boost)
             results.append(
                 SearchResult(
                     chunk=chunk,
@@ -185,6 +186,20 @@ class HybridRetriever:
             )
 
         return sorted(results, key=lambda item: item.final_score, reverse=True)[:top_k]
+
+    @staticmethod
+    def _section_boost(query_terms: set[str], chunk: DocumentChunk) -> float:
+        section = (chunk.metadata.get("section") or "") if chunk.metadata else ""
+        if not section or not query_terms:
+            return 0.0
+        section_tokens = set(tokenize(section))
+        if not section_tokens:
+            return 0.0
+        overlap = len(query_terms & section_tokens)
+        if not overlap:
+            return 0.0
+        # Каждое совпадение query-term с section-token даёт +10% к score, потолок +30%.
+        return min(0.30, overlap * 0.10)
 
     def _build_document_frequencies(self) -> Counter[str]:
         frequencies: Counter[str] = Counter()

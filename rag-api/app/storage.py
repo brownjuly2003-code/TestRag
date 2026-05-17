@@ -88,9 +88,14 @@ class PostgresStore:
                     d.file_name,
                     d.source_url,
                     d.document_type,
-                    d.document_date::text
+                    d.document_date::text,
+                    d.version,
+                    d.effective_from::text,
+                    d.effective_to::text,
+                    d.status
                 from document_chunks c
                 join documents d on d.id = c.document_id
+                where d.status <> 'superseded'
                 order by d.file_name, c.chunk_index
                 """
             )
@@ -104,6 +109,10 @@ class PostgresStore:
             metadata.setdefault("source_url", row[6] or "")
             metadata.setdefault("document_type", row[7] or "")
             metadata.setdefault("date", row[8] or "")
+            metadata["version"] = row[9] or "v1"
+            metadata["effective_from"] = row[10] or None
+            metadata["effective_to"] = row[11] or None
+            metadata["status"] = row[12] or "active"
             chunks.append(
                 DocumentChunk(
                     chunk_id=row[0],
@@ -123,6 +132,10 @@ class PostgresStore:
         refused: bool,
         answer: str,
         sources: list[dict[str, Any]],
+        latency_ms: int | None = None,
+        llm_model: str | None = None,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
     ) -> str | None:
         if not self.enabled:
             return None
@@ -132,8 +145,9 @@ class PostgresStore:
             cursor.execute(
                 """
                 insert into request_logs
-                    (telegram_user_id, question, request_type, confidence, refused, answer, sources)
-                values (%s, %s, %s, %s, %s, %s, %s)
+                    (telegram_user_id, question, request_type, confidence, refused, answer, sources,
+                     latency_ms, llm_model, prompt_tokens, completion_tokens)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 returning id::text
                 """,
                 (
@@ -144,10 +158,67 @@ class PostgresStore:
                     refused,
                     answer,
                     Jsonb(sources),
+                    latency_ms,
+                    llm_model,
+                    prompt_tokens,
+                    completion_tokens,
                 ),
             )
             row = cursor.fetchone()
         return row[0] if row else None
+
+    def metrics(self, window_hours: int = 168) -> dict[str, Any]:
+        """Returns aggregated /ask metrics over last `window_hours` (default 7 days)."""
+        if not self.enabled:
+            return {
+                "window_hours": window_hours,
+                "total_requests": 0,
+                "refusal_rate": 0.0,
+                "avg_latency_ms": None,
+                "avg_confidence": None,
+                "avg_prompt_tokens": None,
+                "avg_completion_tokens": None,
+                "bad_feedback_rate": 0.0,
+            }
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                select
+                    count(*),
+                    avg(case when refused then 1.0 else 0.0 end),
+                    avg(latency_ms),
+                    avg(confidence),
+                    avg(prompt_tokens),
+                    avg(completion_tokens)
+                from request_logs
+                where created_at >= now() - make_interval(hours => %s)
+                """,
+                (window_hours,),
+            )
+            row = cursor.fetchone() or (0, 0.0, None, None, None, None)
+            cursor.execute(
+                """
+                select
+                    sum(case when rating = 'bad' then 1 else 0 end)::float
+                        / nullif(count(*), 0)
+                from answer_feedback
+                where created_at >= now() - make_interval(hours => %s)
+                """,
+                (window_hours,),
+            )
+            bad_row = cursor.fetchone()
+            bad_rate = float(bad_row[0]) if bad_row and bad_row[0] is not None else 0.0
+        return {
+            "window_hours": window_hours,
+            "total_requests": int(row[0] or 0),
+            "refusal_rate": float(row[1] or 0.0),
+            "avg_latency_ms": float(row[2]) if row[2] is not None else None,
+            "avg_confidence": float(row[3]) if row[3] is not None else None,
+            "avg_prompt_tokens": float(row[4]) if row[4] is not None else None,
+            "avg_completion_tokens": float(row[5]) if row[5] is not None else None,
+            "bad_feedback_rate": bad_rate,
+        }
 
     def log_feedback(
         self,

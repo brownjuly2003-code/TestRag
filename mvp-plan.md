@@ -6,18 +6,22 @@
 
 ## Current Status
 
-Updated: 2026-05-17 (HEAD `909bd42` после Sprint 1+2).
+Updated: 2026-05-17 EOS (HEAD после Sprint 3 + ТЗ-критика sweep).
 
 - [x] Docker Compose поднят: `postgres`, `rag-api`, `n8n`, `cloudflared`.
 - [x] n8n workflow активирован, публичный webhook через cloudflare tunnel (trycloudflare).
 - [x] Локальный Telegram whitelist для `432751211`.
 - [x] RAG API: `chunk_count=207`, `documents=48`, postgres/mistral/embeddings enabled.
-- [x] Postgres tables: documents, document_chunks, request_logs, answer_feedback (+category +free_text +chunk_ids после M7), review_queue.
-- [x] **pytest 68/68** (`python -m pytest -p no:schemathesis`).
-- [x] Workflow 24 узла активный (TelegramTrigger → Whitelist → Authorized? → Feedback? → Bad Clarify? → Direct Reply? → History? → Docs? → Send Typing → Ask RAG API → Format Answer → Last Part? → Send Answer / Send Answer Part).
+- [x] Postgres tables: documents (+version/effective_from/effective_to/status), document_chunks, request_logs (+latency_ms/llm_model/prompt_tokens/completion_tokens), answer_feedback (+category/free_text/chunk_ids), review_queue (+context jsonb).
+- [x] **pytest 101/101** (`python -m pytest -p no:schemathesis`).
+- [x] Workflow 28 узлов активный (Sprint 3 N1 +4 ветки: Followup? → Resolve Follow-up → Send Typing Followup → Ask RAG Followup).
 - [x] Aviation profile pass на 200 corpus-файлов. MVP-44 подборка ingested.
-- [x] Live TG smoke: controlled-zone Q ответил с HTML, 2 кнопки, drill-down работает.
-- [x] Split до 4000 chars подтверждён через `.tmp/smoke_split.py`: 2 parts (3895+674) в реальный чат, keyboard только на last.
+- [x] Live TG E2E ✅ через `scripts/smoke_tg_e2e.py` (Telethon user account): N1 📎 click, N3 «🧑‍💼 → ACK», N4 reply_to=user_msg_id.
+- [x] Split до 4000 chars подтверждён через `.tmp/smoke_split.py`.
+- [x] ТЗ-критика 12 пунктов закрыта (см. `docs/research/2026-05-17-architecture-critique-tz.md`): 9 covered, 2 known-limitations (whitelist→SSO, external normative), 1 partial (structure-aware chunking).
+- [x] Eval baseline: hit@1=0.22, MRR=0.28, refusal_acc=0.70, avg_latency=5700ms (`scripts/eval_retrieval.py --output .tmp/eval_baseline.json`).
+- [x] /metrics endpoint: refusal_rate, avg_latency_ms, bad_feedback_rate за окно часов.
+- [x] Section-keyword rerank в HybridRetriever (+10% per query-term match в section name, capped at +30%).
 
 ## Sprint 1 — must-have UX polish ✅ DONE (2026-05-17)
 
@@ -43,49 +47,60 @@ Updated: 2026-05-17 (HEAD `909bd42` после Sprint 1+2).
 - [ ] **N1 Follow-up question buttons** — DEFERRED to Sprint 3 (см. ниже).
 - [x] **TG 4096 char split** (вне SYNTHESIS, но критично): Format Answer split по `\n\n` paragraph / предложению / hard chunk. `balanceTags()` дозакрывает разорванные `<b>/<code>`. Workflow `Last Part? If` → `Send Answer` (keyboard) / `Send Answer Part` (без keyboard). См. `docs/known-issues.md` issues 5+6.
 
-## Sprint 3 — production polish (NEXT — 1-2 дня)
+## Sprint 3 — production polish ✅ DONE (2026-05-17 EOS)
 
-### N1 Follow-up question buttons (priority 1)
+### N1 Follow-up question buttons ✅
+- [x] `GET /followup?request_log_id=X&idx=Y` → crafted question; bogus UUID handled (psycopg `id::text = %s`).
+- [x] `PostgresStore.get_request_source`.
+- [x] Whitelist parses `followup:<idx>:<rl>` (47 chars).
+- [x] Workflow 24→28 узлов (+Followup? / Resolve / Send Typing FU / Ask RAG FU).
+- [x] Send Answer → HTTP sendMessage с dynamic `reply_markup: $json.inline_keyboard`.
+- [x] Format Answer dedup сохраняет `_originalIdx` → callback на не-deduped позицию (pollution defence).
+- [x] E2E live: `scripts/smoke_tg_e2e.py` через Telethon, нажатие 📎 → второй RAG-ответ.
 
-Цель: после ответа на вопрос юзер видит 2 кнопки «уточняющий вопрос», клик отправляет новый Q в RAG API.
+### N3 Human handover ✅
+- [x] `alter review_queue add column context jsonb default '[]'`.
+- [x] `/feedback` при `category='human'` тянет `recent_requests(limit=5)` → `review_queue.context`.
+- [x] Format Feedback узел: «Ваш запрос направлен HR/Legal на ручную обработку».
+- [x] E2E live: bad → bad_human → ACK подтверждён.
 
-План (детально в `docs/next-session.md`):
-- **rag-api**: новый endpoint `GET /followup?request_log_id=X&idx=Y` → возвращает crafted question из `request_logs.sources[Y].section` или `.file`.
-- **storage**: `get_request_source(rl_id, idx) -> dict | None`.
-- **Whitelist**: parse `callback_data='followup:<idx>:<rl_uuid>'` (47 байт, fits в TG 64-byte лимит) → `event_type='followup_request'`.
-- **Workflow**: новый `Followup? If` после `Docs? false` → `Resolve Follow-up` HTTP-узел (GET /followup) → `Set Question` Code-узел трансформирует `{question: "..."}` в shape, ожидаемый Send Typing/Ask RAG → продолжает по существующему RAG-пути.
-- **Send Answer refactor**: с Telegram-node на HTTP-node (POST sendMessage), чтобы inline_keyboard был dynamic — добавить 2 follow-up кнопок на основе `sources[0..1].section` + 2 feedback кнопок.
-- **Format Answer**: на последнем item добавить `follow_ups: [{label, callback}]` array.
-- **Тесты**: parse followup callback, /followup endpoint, workflow routing, dynamic inline keyboard.
+### N4 Conversation threading ✅ (reply_to only)
+- [x] Whitelist выставляет `user_message_id`.
+- [x] Format Answer: первая часть → `reply_to_message_id`; остальные null.
+- [x] Send Answer HTTP + Send Answer Part — `replyToMessageId`.
+- [x] E2E live: reply_to=user_msg_id на основной ветке (followup ветка reply_to=None — minor known limitation).
+- [ ] **Prev-N-QA в retrieval query** — отложено (риск сбить hybrid retrieval, нужен A/B по golden Q. См. backlog #6 в `docs/next-session.md`).
 
-Сложность: ~6-8 новых узлов в workflow, ~30 LOC в storage+main, ~5-7 новых тестов.
+### ТЗ-критика 12 пунктов ✅ (2026-05-17 EOS)
 
-### N3 Human handover (priority 2)
+Полная таблица в `docs/research/2026-05-17-architecture-critique-tz.md`. Закрыты:
+- **#1 Retrieval contract**: `AskResponse.status` (answerable/unanswerable/needs_human_review), `effective_date_max`, `latency_ms`; `Source` пробрасывает `version/effective_from/effective_to/status`.
+- **#3 Reranking**: section-keyword rerank в `HybridRetriever._section_boost` (+10% per query-term match, capped at +30%).
+- **#5 Versioning**: `documents.version/effective_from/effective_to/status`; `load_chunks` фильтрует `superseded`.
+- **#8 Eval pipeline**: `scripts/eval_retrieval.py` — Hit@1, Hit@5, MRR, refusal_accuracy, baseline сохранён.
+- **#12 Observability**: `request_logs.latency_ms/llm_model/prompt_tokens/completion_tokens` + `GET /metrics?window_hours=N`.
 
-Цель: при `feedback:bad_human` → запись в review_queue с last 5 сообщений + confirmation user'у.
+Known limitations (out of MVP scope, документированы):
+- **#4 Structure-aware chunking**: фиксированный 500/50 OK для 200 markdown.
+- **#6 Whitelist→SSO/RLS**: TG whitelist для MVP. Production требует SSO + Postgres RLS.
+- **#9 External normative**: corpus local, без live-обновления норм.
 
-- [x] `feedback:bad_human` уже пишет `category='human'` в answer_feedback (через Sprint 1 drill-down).
-- [ ] Добавить column `review_queue.context` jsonb для last 5 messages.
-- [ ] Endpoint `/feedback` при `category='human'` дополнительно подтягивает `recent_requests(telegram_user_id, limit=5)` и пишет в `review_queue.context`.
-- [ ] Workflow Format Feedback при `category='human'` отправляет «Ваш запрос направлен HR/Legal на ручную обработку, ответят в течение N рабочих дней».
+## Sprint 4 — retrieval polish (NEXT)
 
-### N4 Conversation threading (priority 3)
+Цель: поднять Hit@1 ≥0.6, MRR ≥0.55 на golden Q (текущий baseline: 0.22 / 0.28).
 
-Цель: reply-to-message подмешивает prev 3 QA в retrieval query.
+- [ ] **Retrieval polluted fix** (`docs/findings/2026-05-17-retrieval-aviation-pollution.md`): re-profile aviation pass только для tlog/safety/comp файлов. HR-шаблоны откатить к pre-aviation версии. 3-5 часов.
+- [ ] **Boost section weight** в HybridRetriever: текущий +10% per match → попробовать +20%, замерить через eval.
+- [ ] **Document type filter в /ask**: optional `document_type: str` параметр → ограничивает retrieval по metadata.document_type.
+- [ ] **Eval-driven gate**: добавить `pytest scripts/test_eval_regression.py` который читает `.tmp/eval_baseline.json` и упирается если MRR упал ниже baseline.
 
-- [ ] Whitelist: detect `$json.callback_query.message.reply_to_message` / `$json.message.reply_to_message`.
-- [ ] При наличии reply_to: extract `thread_id` (parent message_id) + lookup prev requests via `get_thread_history(thread_id)`.
-- [ ] /ask: accept optional `prev_context: list[str]` параметр → prepend в retrieval query.
-- [ ] DB: новая таблица `message_threads(message_id, request_log_id, parent_message_id)`.
+## Sprint 5 — production hardening (если потребуется)
 
-### N2 Quick-actions (priority 4)
-
-- [ ] «Уточнить» — rerun с top_k=10 (вместо 5).
-- [ ] «Развернуть» — full chunk content вместо snippet.
-
-### Sprint 4 — retrieval polish (low-priority но необходим для production)
-
-- [ ] **Retrieval polluted** (см. `docs/known-issues.md` issue 1 + `docs/findings/2026-05-17-retrieval-aviation-pollution.md`): controlled-zone Q даёт top=HR-шаблоны. Aviation pass раскидал aviation-tokens по всем файлам. Fix: re-profile aviation pass только для tlog/safety/comp файлов.
+- [ ] **N2 Quick-actions**: «Уточнить» (top_k=10 rerun), «Развернуть» (full chunk content).
+- [ ] **Prev-N-QA в retrieval** (after Sprint 4 stability): ablation A/B на golden Q.
+- [ ] **Structure-aware chunking**: split по markdown `##`/`###` headers вместо фиксированных 500 токенов.
+- [ ] **SSO + RLS**: per-user role + Supabase-style row level security на document_chunks.
+- [ ] **External normative ingestion**: один lawsource live-обновляемый (КонсультантПлюс API, например).
 
 ## Anti-patterns (явно НЕ делаем)
 
@@ -107,9 +122,12 @@ Updated: 2026-05-17 (HEAD `909bd42` после Sprint 1+2).
 - [x] HTML рендер ответа без `**markdown**`-артефактов.
 - [x] Длинные ответы > 4096 chars не теряются (split на части).
 - [x] Команды /help, /history, /docs работают.
-- [ ] N1 Follow-up question buttons (Sprint 3).
-- [ ] N3 Human handover с context (Sprint 3).
-- [ ] Retrieval polish: top-source соответствует домену вопроса (Sprint 4).
+- [x] N1 Follow-up question buttons (Sprint 3).
+- [x] N3 Human handover с context (Sprint 3).
+- [x] N4 reply-threading (Sprint 3).
+- [x] Eval pipeline + observability (response#1, observability#12).
+- [x] Versioning metadata + section rerank (#3, #5).
+- [ ] Retrieval polish: top-source соответствует домену вопроса (Sprint 4) — текущий MRR=0.28.
 - [ ] MVP можно показать без покупки n8n Cloud по `docs/demo-runbook.md` (зависит от cloudflare named tunnel или paid n8n).
 
 ## Known Issues

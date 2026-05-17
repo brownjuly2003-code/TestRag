@@ -12,8 +12,8 @@
 - Стек: FastAPI + Mistral + hybrid retrieval (BM25 + pgvector) → n8n (24 узла) → Telegram-бот @AIagentJu_bot.
 - Документация: README.md, mvp-plan.md, docs/demo-runbook.md, docs/legal-document-prompts.md, docs/research/SYNTHESIS.md, docs/findings/.
 
-Текущее состояние (HEAD `df65f71` + N1 uncommitted, 2026-05-17 evening):
-- pytest 82/82 (+5 /followup API + 9 N1 workflow поверх 68 baseline).
+Текущее состояние (HEAD после ТЗ-критика sweep, 2026-05-17 EOS):
+- pytest 101/101 (+5 /followup API + 9 N1 workflow + 5 N3 + 6 N4 + 8 ТЗ-критика поверх 68 baseline).
 - Sprint 1 deployed + TG smoke ✓ через @AIagentJu_bot.
 - Sprint 2 deployed:
   - M7 schema: answer_feedback +category +free_text +chunk_ids.
@@ -31,17 +31,20 @@
 
 Что осталось (Sprint 3, по приоритету):
 
-1. ✅ **N1 follow-up question buttons** — DONE (commit `800b127`). E2E smoke `.tmp/smoke_followup.py` зелёный.
+1. ✅ Sprint 3 N1+N3+N4 — DONE (см. mvp-plan.md + git log).
+2. ✅ ТЗ-критика 12 пунктов закрыта (см. docs/research/2026-05-17-architecture-critique-tz.md).
 
-2. ✅ **N3 Human handover** — DONE. `alter review_queue add column context jsonb`. /feedback при category=human тянет last 5 messages → context. Format Feedback узел показывает «Ваш запрос направлен HR/Legal на ручную обработку» вместо «Оценка принята.». Live smoke: `curl POST /feedback {category:human}` → `select reason, jsonb_array_length(context) from review_queue` → `human|5`.
+**Что осталось (Sprint 4, по приоритету):**
 
-3. ✅ **N4 Conversation threading** — частично DONE (reply_to_message_id). Whitelist выставляет user_message_id из message.message_id (или callback_query.message.message_id). Format Answer первая часть `reply_to_message_id`=user_message_id, остальные null. Send Answer HTTP body + Send Answer Part Telegram-node параметр `replyToMessageId`. Prev-3-QA-в-retrieval отложено (риск сбить hybrid retrieval без A/B).
+3. **Retrieval polish (issue #1 pollution)**: re-profile aviation pass только для tlog/safety/comp файлов, HR-шаблоны вернуть к pre-aviation. Цель — поднять Hit@1 с 0.22 до ≥0.6, MRR с 0.28 до ≥0.55. Eval baseline в `.tmp/eval_baseline.json`. 3-5 часов.
 
-4. **N2 Quick-actions**: «Уточнить» (top_k=10 rerun), «Развернуть» (full chunk).
+4. **Eval-driven regression gate**: после Sprint 4 retrieval polish добавить `pytest scripts/test_eval_regression.py` который читает `.tmp/eval_baseline.json` и проваливается если MRR упал ниже baseline.
 
-5. **Retrieval regression** (документировано в docs/findings/2026-05-17-retrieval-aviation-pollution.md): aviation-pass переписал ВСЕ 200 файлов под авиа, включая HR-шаблоны. Теперь controlled-zone Q даёт top=02_hr_tmp_employment_contract.md score 0.937 вместо 01_hr_pol_safety. 4 варианта fix описаны там. Решение: пока документировать как known limitation демо (Mistral собирает корректный ответ из «не тех» source); Sprint 4 retrieval polish.
+5. **N2 Quick-actions** (Sprint 5): «Уточнить» (top_k=10 rerun), «Развернуть» (full chunk).
 
-6. **Backlog: prev-N-QA в retrieval query** (was N4 part 2). Идея: расширить /ask payload `recent_questions[]` или server-side тянуть last 3 QA для user → конкатить в query текст перед embedding. Риск: сбивает hybrid BM25 hit на основном вопросе. Нужен ablation A/B на golden-questions перед merge.
+6. **Backlog: prev-N-QA в retrieval query** (was N4 part 2). Идея: расширить /ask payload `recent_questions[]` или server-side тянуть last 3 QA для user → конкатить в query текст перед embedding. Риск: сбивает hybrid BM25 hit на основном вопросе. Нужен ablation A/B на golden-questions через `scripts/eval_retrieval.py` перед merge.
+
+7. **Document type filter в /ask** (Sprint 4 nice-to-have): optional `document_type: str` параметр → ограничивает retrieval по metadata.document_type. Сейчас все запросы идут глобально.
 
 Sprint 2 TG-смок (если ещё не пробовала после `daa8795`):
 1. `/help` → HTML список команд + примеры.
@@ -61,7 +64,7 @@ Sprint 2 TG-смок (если ещё не пробовала после `daa879
 
 ```powershell
 cd D:\TestRag
-python -m pytest -p no:schemathesis  # 93 passed
+python -m pytest -p no:schemathesis  # 101 passed
 docker compose config --quiet
 docker compose up -d
 curl http://localhost:8000/health    # chunk_count=207
@@ -73,6 +76,9 @@ python scripts/smoke_followup.py     # API-only E2E N1
 # TG E2E smoke (user account через telethon, нажимает 📎/👎/🧑‍💼)
 python scripts/smoke_tg_e2e.py       # читает D:/MCP/telegram-mcp/.env
 python .tmp/smoke_split.py           # send synthetic 4000-char split to chat
+# Eval baseline (critique #8) — обновлять перед/после Sprint 4
+python scripts/eval_retrieval.py --output .tmp/eval_baseline.json
+curl 'http://localhost:8000/metrics?window_hours=168'   # critique #12 observability
 ```
 
 ## TG E2E через telegram-mcp / Telethon

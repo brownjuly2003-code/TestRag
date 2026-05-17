@@ -16,9 +16,16 @@ class MistralChatClient:
     def enabled(self) -> bool:
         return bool(self.api_key)
 
-    async def answer(self, question: str, results: list[SearchResult]) -> str | None:
+    async def answer(
+        self, question: str, results: list[SearchResult]
+    ) -> tuple[str | None, dict[str, int | str | None]]:
+        usage: dict[str, int | str | None] = {
+            "model": self.model if self.enabled else None,
+            "prompt_tokens": None,
+            "completion_tokens": None,
+        }
         if not self.enabled:
-            return None
+            return None, usage
 
         context = "\n\n".join(
             f"Источник {index + 1}: {result.chunk.content}"
@@ -26,7 +33,7 @@ class MistralChatClient:
             if result.final_score > 0
         )
         if not context:
-            return None
+            return None, usage
 
         payload = {
             "model": self.model,
@@ -56,9 +63,12 @@ class MistralChatClient:
                 response.raise_for_status()
                 data = response.json()
         except httpx.HTTPError:
-            return None
+            return None, usage
 
-        return data["choices"][0]["message"]["content"]
+        api_usage = data.get("usage", {}) or {}
+        usage["prompt_tokens"] = api_usage.get("prompt_tokens")
+        usage["completion_tokens"] = api_usage.get("completion_tokens")
+        return data["choices"][0]["message"]["content"], usage
 
     async def document_plan(self, system_prompt: str, user_prompt: str) -> dict | None:
         if not self.enabled:

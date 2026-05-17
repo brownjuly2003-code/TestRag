@@ -24,6 +24,44 @@ def test_hybrid_retriever_prefers_exact_legal_term_match():
     assert results[0].final_score > results[1].final_score
 
 
+def test_section_boost_pushes_section_match_above_other_match():
+    """Section-keyword rerank (#3): chunk с тем же query-term в section получает score boost."""
+    chunks = [
+        DocumentChunk(
+            chunk_id="generic",
+            content="Контролируемая зона упоминается в общем описании безопасности аэропорта.",
+            metadata={"file": "06_comp_security.md", "section": "Прочее", "date": "2026-01-10"},
+        ),
+        DocumentChunk(
+            chunk_id="targeted",
+            content="Контролируемая зона упоминается в общем описании безопасности аэропорта.",
+            metadata={
+                "file": "01_hr_pol_safety.md",
+                "section": "Контролируемая зона",
+                "date": "2026-01-10",
+            },
+        ),
+    ]
+    retriever = HybridRetriever(chunks)
+    results = retriever.search("Что такое контролируемая зона?", top_k=2)
+    assert results[0].chunk.chunk_id == "targeted"
+    # Boost проявляется через final_score — двух чанков с идентичным контентом не должно быть равны
+    assert results[0].final_score > results[1].final_score
+
+
+def test_section_boost_safe_when_no_section_metadata():
+    chunks = [
+        DocumentChunk(
+            chunk_id="a",
+            content="Любой контент про отпуск.",
+            metadata={"file": "x.md"},
+        ),
+    ]
+    retriever = HybridRetriever(chunks)
+    results = retriever.search("отпуск", top_k=1)
+    assert results and results[0].final_score >= 0
+
+
 def test_answer_policy_requires_source_and_confidence():
     policy = AnswerPolicy(min_confidence=0.35)
 
