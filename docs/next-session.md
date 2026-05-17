@@ -61,16 +61,32 @@ Sprint 2 TG-смок (если ещё не пробовала после `daa879
 
 ```powershell
 cd D:\TestRag
-python -m pytest -p no:schemathesis  # 82 passed
+python -m pytest -p no:schemathesis  # 93 passed
 docker compose config --quiet
 docker compose up -d
 curl http://localhost:8000/health    # chunk_count=207
 curl 'http://localhost:8000/history?telegram_user_id=432751211&limit=5'
 curl http://localhost:8000/docs/summary
 # N1 smoke: real rl_id из request_logs (см. ниже)
-curl 'http://localhost:8000/followup?request_log_id=71ec9a0e-4c58-4294-adc4-31ba29c3830a&idx=0'
+curl 'http://localhost:8000/followup?request_log_id=<uuid>&idx=0'
+python scripts/smoke_followup.py     # API-only E2E N1
+# TG E2E smoke (user account через telethon, нажимает 📎/👎/🧑‍💼)
+python scripts/smoke_tg_e2e.py       # читает D:/MCP/telegram-mcp/.env
 python .tmp/smoke_split.py           # send synthetic 4000-char split to chat
 ```
+
+## TG E2E через telegram-mcp / Telethon
+
+Установлен chigwell/telegram-mcp в `D:/MCP/telegram-mcp/`. Конфиг в `~/.claude.json` (`claude mcp list` → `telegram-mcp: ✓ Connected`). Сессия — StringSession для @AIagentJu_bot whitelist (id=432751211, имя Julia).
+
+`scripts/smoke_tg_e2e.py` гоняет полный E2E через Telethon (user account):
+1. send_message «Что такое controlled zone?»
+2. wait reply → verify N4 `reply_to_msg_id` == user msg_id ✓
+3. inspect inline_keyboard → 2 📎 follow-up + 2 👍/👎 ✓
+4. click первой 📎 → wait second reply (N1)
+5. click 👎 → edit reply markup → 3 reason buttons (Sprint 1)
+6. click 🧑‍💼 → wait ACK «Ваш запрос направлен HR/Legal на ручную обработку» (N3) ✓
+7. select review_queue order by created_at desc → `human|5`
 
 ## Sprint 2 schema check
 
