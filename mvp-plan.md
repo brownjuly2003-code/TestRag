@@ -134,7 +134,7 @@ Backlog из Kimi+Codex consensus, требует архитектурного �
 - [ ] **Extract business logic из n8n в rag-api**: whitelist check, command routing, /help/start/clear copy → FastAPI endpoints `/auth/check`, `/commands`. После — `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`. ~1 день.
 - [ ] **OpenAPI export**: `/openapi.json` → `docs/openapi.yaml` в repo + ADR (n8n choice, BM25 in-memory, Mistral). ~4 часа.
 - [ ] **Retrieval explainability** (codex-audit#6.3): debug fields в `/ask` response (coverage, section_boost) под флагом `?debug=1`. ~2 часа.
-- [ ] **Empty/stop-word query fallback** (codex-audit MISSED 1.2): на `query_tokens=[]` пробовать vector-only вместо `[]` сразу. ~1 час.
+- [x] **Empty/stop-word query fallback** (codex-audit MISSED 1.2): `HybridRetriever._vector_only_search` — на `query_tokens=[]` отдаём top-K по cosine, иначе `[]` (нет embedding/нет chunk-embeddings). 3 unit-теста. Live: stop-word query «а или и» → 3 sources score≈0.87, LLM сам отвергает через `is_pure_refusal` гард.
 - [ ] **HTTP client pooling** (codex-audit MISSED 8.3): `httpx.AsyncClient` singleton на runtime startup, lifespan event для close. ~2 часа.
 - [ ] **N2 Quick-actions**: «Уточнить» (top_k=10 rerun), «Развернуть» (full chunk content). ~3 часа.
 - [ ] **Prev-N-QA в retrieval**: ablation A/B на golden Q. ~3 часа.

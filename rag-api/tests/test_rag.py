@@ -153,6 +153,60 @@ def test_aviation_profile_in_dangerous_goods_regulation():
     assert "awb" in text or "авиа" in text
 
 
+def test_vector_only_fallback_when_query_tokens_empty():
+    """Sprint 6 #4: запрос из стоп-слов с embedding → возвращаем ближайший по cosine."""
+    chunks = [
+        DocumentChunk(
+            chunk_id="far",
+            content="Документ про что-то совсем другое.",
+            metadata={"file": "x.md"},
+            embedding=[0.0, 1.0],
+        ),
+        DocumentChunk(
+            chunk_id="near",
+            content="Релевантный по семантике документ.",
+            metadata={"file": "y.md"},
+            embedding=[1.0, 0.0],
+        ),
+    ]
+    retriever = HybridRetriever(chunks)
+    # «а или и» — все токены отфильтруются как стоп-слова / 1-char.
+    results = retriever.search("а или и", top_k=2, query_embedding=[1.0, 0.0])
+    assert results, "vector-only fallback должен вернуть результаты"
+    assert results[0].chunk.chunk_id == "near"
+    assert results[0].bm25_score == 0.0
+    assert results[0].vector_score > results[1].vector_score
+
+
+def test_vector_only_fallback_returns_empty_without_embedding():
+    chunks = [
+        DocumentChunk(
+            chunk_id="a",
+            content="Любой контент.",
+            metadata={"file": "x.md"},
+            embedding=[1.0, 0.0],
+        ),
+    ]
+    retriever = HybridRetriever(chunks)
+    # Empty tokens И no query_embedding → нечем мерить близость, возвращаем [].
+    results = retriever.search("а или и", top_k=2, query_embedding=None)
+    assert results == []
+
+
+def test_vector_only_fallback_returns_empty_when_chunks_have_no_embeddings():
+    chunks = [
+        DocumentChunk(
+            chunk_id="a",
+            content="Любой контент.",
+            metadata={"file": "x.md"},
+            embedding=None,
+        ),
+    ]
+    retriever = HybridRetriever(chunks)
+    results = retriever.search("а или и", top_k=2, query_embedding=[1.0, 0.0])
+    assert results == []
+
+
 def test_hybrid_retriever_prefers_aviation_terminal_over_office_when_aviation_query():
     chunks = [
         DocumentChunk(

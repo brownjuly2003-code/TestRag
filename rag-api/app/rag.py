@@ -166,9 +166,11 @@ class HybridRetriever:
         top_k: int = 5,
         query_embedding: list[float] | None = None,
     ) -> list[SearchResult]:
-        query_tokens = tokenize(query)
-        if not query_tokens or top_k <= 0:
+        if top_k <= 0:
             return []
+        query_tokens = tokenize(query)
+        if not query_tokens:
+            return self._vector_only_search(query_embedding, top_k)
 
         query_terms = set(query_tokens)
         bm25_scores = [self._bm25_score(query_tokens, index) for index in range(len(self.chunks))]
@@ -199,6 +201,30 @@ class HybridRetriever:
                 )
             )
 
+        return sorted(results, key=lambda item: item.final_score, reverse=True)[:top_k]
+
+    def _vector_only_search(
+        self, query_embedding: list[float] | None, top_k: int
+    ) -> list[SearchResult]:
+        # Sprint 6 #4: когда BM25 tokens=[] (стоп-слова, кириллица<2, эмодзи),
+        # отдаём семантический fallback вместо пустого ответа.
+        if query_embedding is None:
+            return []
+        if not any(chunk.embedding for chunk in self.chunks):
+            return []
+        results: list[SearchResult] = []
+        for chunk in self.chunks:
+            if not chunk.embedding:
+                continue
+            vector_score = (cosine_similarity(query_embedding, chunk.embedding) + 1) / 2
+            results.append(
+                SearchResult(
+                    chunk=chunk,
+                    bm25_score=0.0,
+                    vector_score=vector_score,
+                    final_score=vector_score,
+                )
+            )
         return sorted(results, key=lambda item: item.final_score, reverse=True)[:top_k]
 
     @classmethod
