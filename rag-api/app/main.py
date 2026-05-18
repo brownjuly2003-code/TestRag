@@ -617,7 +617,8 @@ def build_document_type_response(
         source_requirements.append("Нужны релевантные источники RAG или утвержденный шаблон документа")
     if not has_template:
         source_requirements.append("Нужен утвержденный шаблон для выбранного типа документа")
-    if can_generate_draft and document_type != "HR_ORDER_HIRING":
+    CODE_TEMPLATE_TYPES = {"HR_ORDER_HIRING", "HR_ORDER_VACATION"}
+    if can_generate_draft and document_type not in CODE_TEMPLATE_TYPES:
         can_generate_draft = False
         confidence = "MEDIUM"
         source_requirements.append("Для этого типа документа пока нет кодового шаблона MVP")
@@ -639,6 +640,19 @@ def build_document_type_response(
             f"Условия оплаты: {fields['salary_terms']}.\n"
             f"Основание оформления: {fields['employment_basis']}.\n\n"
             "Ответственный специалист должен проверить реквизиты, основание оформления и применимый шаблон до подписания.\n\n"
+            "Документ является черновиком и требует проверки ответственным специалистом."
+        )
+    elif can_generate_draft and document_type == "HR_ORDER_VACATION":
+        fields = request.user_provided_fields
+        draft_text = (
+            "Требует проверки юристом/HR\n\n"
+            "ПРИКАЗ\n"
+            "о предоставлении отпуска\n\n"
+            f"Предоставить отпуск работнику: {fields['employee_full_name']}.\n"
+            f"Дата начала отпуска: {fields['vacation_start_date']}.\n"
+            f"Дата окончания отпуска: {fields['vacation_end_date']}.\n"
+            f"Основание: {fields['vacation_basis']}.\n\n"
+            "Ответственный специалист должен проверить даты, тип отпуска и применимый шаблон до подписания.\n\n"
             "Документ является черновиком и требует проверки ответственным специалистом."
         )
 

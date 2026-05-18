@@ -797,6 +797,43 @@ def test_document_type_detection_generates_hiring_order_draft_from_template(monk
     assert "Документ является черновиком" in body["draft_text"]
 
 
+def test_document_type_detection_generates_vacation_order_draft_from_template(monkeypatch):
+    """TZ §2: second code-template — Приказ о предоставлении отпуска."""
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/document/type-detection",
+            json={
+                "question": "Подготовь приказ об отпуске для Петрова Петра.",
+                "user_provided_fields": {
+                    "employee_full_name": "Петров Петр Петрович",
+                    "vacation_start_date": "2026-06-01",
+                    "vacation_end_date": "2026-06-28",
+                    "vacation_basis": "ежегодный оплачиваемый отпуск согласно графику",
+                },
+                "available_templates": [
+                    {
+                        "id": "hr_order_vacation_v1",
+                        "document_type": "HR_ORDER_VACATION",
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["document_type"] == "HR_ORDER_VACATION"
+    assert body["confidence"] == "HIGH"
+    assert body["can_generate_draft"] is True
+    assert body["missing_fields"] == []
+    assert "Петров Петр Петрович" in body["draft_text"]
+    assert "2026-06-01" in body["draft_text"]
+    assert "ежегодный оплачиваемый отпуск" in body["draft_text"]
+    assert "Документ является черновиком" in body["draft_text"]
+
+
 def test_document_type_detection_does_not_return_llm_generated_draft(monkeypatch):
     store = FakeStore()
     monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store, llm=FakeDocumentPlanner()))
