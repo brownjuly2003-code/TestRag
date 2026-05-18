@@ -206,7 +206,10 @@ class FormatAnswerRequest(BaseModel):
     confidence: float | None = None
     refused: bool = False
     sources: list[FormatAnswerSource] = Field(default_factory=list)
-    request_log_id: str = ""
+    # CX review b61609d P2: принимаем None, потому что PostgresStore.log_request
+    # возвращает None при postgres disabled (DB-less deployments). Pydantic v2
+    # `str = ""` отклоняет null с 422; `str | None = None` принимает оба варианта.
+    request_log_id: str | None = None
     chat_id: int | str
     user_message_id: int | None = None
 
@@ -896,7 +899,7 @@ def tg_format_answer(request: FormatAnswerRequest) -> FormatAnswerResponse:
         confidence=request.confidence,
         refused=request.refused,
         sources=[s.model_dump(exclude_none=True) for s in request.sources],
-        request_log_id=request.request_log_id,
+        request_log_id=request.request_log_id or "",
         chat_id=request.chat_id,
         user_message_id=request.user_message_id,
     )

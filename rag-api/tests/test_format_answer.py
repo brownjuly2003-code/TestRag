@@ -326,6 +326,54 @@ def test_format_answer_keyboard_followup_uses_original_idx_after_dedup():
     assert callbacks == ["followup:0:rl-x", "followup:2:rl-x"]
 
 
+def test_format_answer_keeps_chip_on_cautious_preface():
+    """CX review b61609d P2 regression: /ask returns refused=False для ответов
+    типа «Данных недостаточно. Однако из источников видно, что AWB обязателен».
+    Format Answer не должен сам решать что это refusal — должен доверять флагу.
+    """
+    cautious_answer = (
+        "Данных недостаточно для точного ответа. Однако из источников видно, что для "
+        "отправки dangerous goods авиатранспортом требуется AWB/MAWB/HAWB, "
+        "security screening, упаковка по IATA DGR и инструктаж сотрудников."
+    )
+    items = _format(
+        {
+            "answer": cautious_answer,
+            "confidence": 0.65,
+            "refused": False,  # /ask решил что это валидный ответ
+            "request_log_id": "rl",
+            "sources": [{"file": "05_tlog_dg.md", "section": "DG-процедура", "score": 0.8}],
+        }
+    )
+    text = items[0]["text"]
+    # chip ДОЛЖЕН быть (Mid band 0.65)
+    assert "Средняя уверенность" in text
+    # «Что делать дальше» НЕ должно появляться — это not-refused path
+    assert "Что делать дальше" not in text
+    # «Источники:» а не «Ближайшие документы (вне ответа):»
+    assert "Источники:" in text
+    assert "Ближайшие документы" not in text
+
+
+def test_format_answer_endpoint_accepts_null_request_log_id():
+    """CX review b61609d P2 regression: /ask может вернуть request_log_id=null
+    когда postgres disabled. Pydantic должен принять, не вернуть 422."""
+    client = TestClient(app)
+    response = client.post(
+        "/tg/format-answer",
+        json={
+            "answer": "x",
+            "sources": [],
+            "request_log_id": None,
+            "chat_id": 42,
+        },
+    )
+    assert response.status_code == 200, response.text
+    part = response.json()["parts"][0]
+    # без request_log_id — нет keyboard (build_keyboard guard)
+    assert part["inline_keyboard"] is None
+
+
 def test_format_answer_refused_drops_chip_and_adds_next_steps():
     items = _format(
         {

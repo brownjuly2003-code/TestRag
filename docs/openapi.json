@@ -1259,9 +1259,15 @@
             "title": "Sources"
           },
           "request_log_id": {
-            "type": "string",
-            "title": "Request Log Id",
-            "default": ""
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Log Id"
           },
           "chat_id": {
             "anyOf": [

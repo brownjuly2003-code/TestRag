@@ -274,7 +274,14 @@ def format_answer(
     raw_answer = answer or ""
     deduped = _dedup_sources(sources)
 
-    is_refusal = bool(refused) or looks_refusal(raw_answer)
+    # CX review b61609d P2: доверяем `refused` от /ask вместо собственного
+    # `looks_refusal(text)`. /ask уже различает «полный отказ» от «cautious
+    # lead-in + полезное тело» через `is_pure_refusal(text, min_body_chars=120)`.
+    # Старая ветка `or looks_refusal(raw_answer)` ловила валидные ответы вида
+    # «Данных недостаточно. Однако из источников видно, что AWB обязателен...»
+    # и прятала чип + добавляла «Что делать дальше», хотя ответ полезен.
+    # Регрессионный тест: `test_format_answer_keeps_chip_on_cautious_preface`.
+    is_refusal = bool(refused)
     chip = "" if is_refusal else confidence_chip(confidence)
 
     answer_html = md_to_html(_escape_html(raw_answer))

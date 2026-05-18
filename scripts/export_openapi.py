@@ -20,10 +20,19 @@ import yaml  # noqa: E402
 from app.main import app  # noqa: E402
 
 
+def _write_lf(path: Path, text: str) -> None:
+    """CX review b61609d P3: запись с явным LF, чтобы Windows-CRLF не ломал
+    `git diff --check` whitespace gate. `Path.write_text` на Windows конвертит
+    `\\n` → `\\r\\n` через универсальные newlines; обходим через `write_bytes`."""
+    if not text.endswith("\n"):
+        text += "\n"
+    path.write_bytes(text.encode("utf-8"))
+
+
 def export(path: Path) -> None:
     schema = app.openapi()
     yaml_text = yaml.safe_dump(schema, sort_keys=False, allow_unicode=True, width=120)
-    path.write_text(yaml_text, encoding="utf-8")
+    _write_lf(path, yaml_text)
     print(f"openapi.yaml written: {path}")
     print(f"  paths: {len(schema.get('paths', {}))}")
     print(f"  schemas: {len(schema.get('components', {}).get('schemas', {}))}")
@@ -33,11 +42,10 @@ def main() -> int:
     out = REPO_ROOT / "docs" / "openapi.yaml"
     out.parent.mkdir(parents=True, exist_ok=True)
     export(out)
-    # JSON версия для clients, которые не любят yaml.
     json_out = REPO_ROOT / "docs" / "openapi.json"
-    json_out.write_text(
+    _write_lf(
+        json_out,
         json.dumps(app.openapi(), ensure_ascii=False, indent=2, sort_keys=False),
-        encoding="utf-8",
     )
     print(f"openapi.json written: {json_out}")
     return 0

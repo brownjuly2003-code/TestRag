@@ -813,9 +813,10 @@ components:
           type: array
           title: Sources
         request_log_id:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Request Log Id
-          default: ''
         chat_id:
           anyOf:
           - type: integer
