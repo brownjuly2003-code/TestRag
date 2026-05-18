@@ -1,7 +1,9 @@
 import json
-import subprocess
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
+from app.main import app
 from app.tg_classifier import classify as _classify_update
 
 
@@ -24,17 +26,26 @@ def _run_whitelist(payload: dict) -> dict:
     return _classify_update(payload, ["42"])
 
 
-def _run_format_answer(payload: dict, chat_id: int = 42) -> dict:
-    nodes = _load_nodes()
-    code = nodes["Format Answer"]["parameters"]["jsCode"]
-    script = f"""
-const $node = {{ Whitelist: {{ json: {{ chat_id: {chat_id} }} }} }};
-const $json = {json.dumps(payload)};
-const result = new Function('$json', '$node', {json.dumps(code)})($json, $node);
-console.log(JSON.stringify(result[0].json));
-"""
-    result = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
-    return json.loads(result.stdout)
+def _call_format_answer_endpoint(payload: dict, chat_id: int = 42, user_message_id: int | None = None) -> list[dict]:
+    """Sprint 9: Format Answer JS — теперь thin proxy на /tg/format-answer.
+    Тесты вызывают Python endpoint напрямую (parity guaranteed: одна реализация)."""
+    body = {
+        "answer": payload.get("answer", ""),
+        "confidence": payload.get("confidence"),
+        "refused": payload.get("refused") is True,
+        "sources": payload.get("sources") or [],
+        "request_log_id": payload.get("request_log_id", ""),
+        "chat_id": chat_id,
+        "user_message_id": user_message_id,
+    }
+    with TestClient(app) as client:
+        response = client.post("/tg/format-answer", json=body)
+    response.raise_for_status()
+    return response.json()["parts"]
+
+
+def _run_format_answer(payload: dict, chat_id: int = 42, user_message_id: int | None = None) -> dict:
+    return _call_format_answer_endpoint(payload, chat_id=chat_id, user_message_id=user_message_id)[0]
 
 
 def test_if_nodes_use_n8n_v2_filter_conditions():
@@ -299,18 +310,9 @@ def test_format_answer_converts_markdown_to_html():
     assert "• ULD" in text
 
 
-def _run_format_answer_all(payload: dict, chat_id: int = 42) -> list[dict]:
-    """Format Answer теперь возвращает array of items (split на части)."""
-    nodes = _load_nodes()
-    code = nodes["Format Answer"]["parameters"]["jsCode"]
-    script = f"""
-const $node = {{ Whitelist: {{ json: {{ chat_id: {chat_id} }} }} }};
-const $json = {json.dumps(payload)};
-const result = new Function('$json', '$node', {json.dumps(code)})($json, $node);
-console.log(JSON.stringify(result));
-"""
-    result = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
-    return [item["json"] for item in json.loads(result.stdout)]
+def _run_format_answer_all(payload: dict, chat_id: int = 42, user_message_id: int | None = None) -> list[dict]:
+    """Возвращает все parts (split на части)."""
+    return _call_format_answer_endpoint(payload, chat_id=chat_id, user_message_id=user_message_id)
 
 
 def test_format_answer_splits_long_response_into_parts_under_tg_max():
@@ -443,17 +445,19 @@ def test_send_feedback_passes_category_as_dedicated_field():
     assert "category:" not in body.split("category: $json.category")[0]
 
 
+_FORMAT_ENDPOINT = {
+    "Format History": ("/tg/format-history", lambda p: {"items": p.get("items") or []}),
+    "Format Docs": ("/tg/format-docs", lambda p: {"categories": p.get("categories") or [], "total_docs": p.get("total_docs") or 0}),
+}
+
+
 def _run_format(node_name: str, payload: dict, chat_id: int = 42) -> dict:
-    nodes = _load_nodes()
-    code = nodes[node_name]["parameters"]["jsCode"]
-    script = f"""
-const $node = {{ Whitelist: {{ json: {{ chat_id: {chat_id} }} }} }};
-const $json = {json.dumps(payload)};
-const result = new Function('$json', '$node', {json.dumps(code)})($json, $node);
-console.log(JSON.stringify(result[0].json));
-"""
-    result = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
-    return json.loads(result.stdout)
+    """Sprint 9: Format History/Docs JS — thin proxies на Python endpoints."""
+    url, body_builder = _FORMAT_ENDPOINT[node_name]
+    with TestClient(app) as client:
+        response = client.post(url, json=body_builder(payload))
+    response.raise_for_status()
+    return {"chat_id": chat_id, "text": response.json()["text"]}
 
 
 def test_format_history_renders_items_with_html_and_plural():
@@ -511,6 +515,9 @@ def test_format_docs_includes_sample_file_names():
 
 
 def _run_format_feedback(category: str | None, chat_id: int = 42) -> dict:
+    """Format Feedback node остаётся JS Code (тривиальный — 2 message-string).
+    Тестируется через subprocess node — нет смысла портить такую тривиальщину в Python."""
+    import subprocess  # local import: only this single test path needs subprocess
     nodes = _load_nodes()
     code = nodes["Format Feedback"]["parameters"]["jsCode"]
     script = f"""
@@ -558,16 +565,10 @@ def test_whitelist_captures_user_message_id_from_callback_query():
 
 
 def test_format_answer_first_part_carries_reply_to_message_id():
-    nodes = _load_nodes()
-    code = nodes["Format Answer"]["parameters"]["jsCode"]
-    script = f"""
-const $node = {{ Whitelist: {{ json: {{ chat_id: 42, user_message_id: 1234 }} }} }};
-const $json = {json.dumps({"answer": "Параграф.\\n\\n" * 400, "request_log_id": "rl-1", "sources": []})};
-const result = new Function('$json', '$node', {json.dumps(code)})($json, $node);
-console.log(JSON.stringify(result));
-"""
-    result = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
-    items = [item["json"] for item in json.loads(result.stdout)]
+    items = _run_format_answer_all(
+        {"answer": "Параграф.\n\n" * 400, "request_log_id": "rl-1", "sources": []},
+        user_message_id=1234,
+    )
     assert len(items) >= 2
     assert items[0]["reply_to_message_id"] == 1234
     for it in items[1:]:
@@ -575,18 +576,23 @@ console.log(JSON.stringify(result));
 
 
 def test_format_answer_single_part_has_reply_to_message_id():
-    nodes = _load_nodes()
-    code = nodes["Format Answer"]["parameters"]["jsCode"]
-    script = f"""
-const $node = {{ Whitelist: {{ json: {{ chat_id: 42, user_message_id: 2222 }} }} }};
-const $json = {json.dumps({"answer": "Короткий ответ.", "request_log_id": "rl-1", "sources": []})};
-const result = new Function('$json', '$node', {json.dumps(code)})($json, $node);
-console.log(JSON.stringify(result));
-"""
-    result = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
-    items = [item["json"] for item in json.loads(result.stdout)]
+    items = _run_format_answer_all(
+        {"answer": "Короткий ответ.", "request_log_id": "rl-1", "sources": []},
+        user_message_id=2222,
+    )
     assert len(items) == 1
     assert items[0]["reply_to_message_id"] == 2222
+
+
+def test_format_answer_node_is_thin_proxy_on_python_endpoint():
+    """Sprint 9: fat JS Code (158 lines) заменён на thin proxy ~20 строк,
+    делающий HTTP POST на /tg/format-answer. Полная логика — Python."""
+    nodes = _load_nodes()
+    code = nodes["Format Answer"]["parameters"]["jsCode"]
+    assert "this.helpers.httpRequest" in code
+    assert "/tg/format-answer" in code
+    assert "resp.parts.map" in code
+    assert len(code.splitlines()) < 30, "thin proxy should be ~20 lines"
 
 
 def test_send_answer_http_body_includes_reply_to_message_id():
@@ -874,20 +880,10 @@ def test_format_answer_refusal_shows_next_steps():
     assert "Низкая уверенность" not in text
 
 
-def test_format_answer_refusal_detection_by_text():
-    """Mistral вернул 'Данных недостаточно' но refused=false (LLM не помечает) — детектим по тексту."""
-    result = _run_format_answer(
-        {
-            "answer": "Данных недостаточно для ответа на этот вопрос.",
-            "confidence": 0.9,
-            "request_log_id": "rl",
-            "sources": [{"file": "a.md", "section": "X", "score": 0.5}],
-        }
-    )
-    text = result["text"]
-    assert "Что делать дальше" in text
-    # на refusal источники называются 'Ближайшие документы' а не 'Источники'
-    assert "Ближайшие документы" in text
+# NOTE: убран test_format_answer_refusal_detection_by_text — CX review b61609d
+# P2 решение: доверяем `refused` от /ask вместо локального looks_refusal(text)
+# override. Старая ветка ловила валидные cautious-ответы как полный отказ.
+# См. rag-api/app/format_answer.py:277.
 
 
 def test_format_answer_sources_have_no_bare_score():
