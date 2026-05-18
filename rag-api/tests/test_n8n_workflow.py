@@ -80,6 +80,15 @@ def test_greeting_is_direct_reply_and_not_rag_question():
     assert "Confidence" not in body["text"]
 
 
+def test_help_mentions_safe_document_drafts():
+    body = _run_whitelist({"message": {"text": "/help", "chat": {"id": 42}, "from": {"id": 42}}})
+    assert body["authorized"] is True
+    assert body["event_type"] == "direct_reply"
+    assert "Черновики" in body["text"]
+    assert "Подготовь приказ об отпуске" in body["text"]
+    assert "проверки HR/Legal" in body["text"]
+
+
 def test_domain_question_stays_rag_question():
     body = _run_whitelist(
         {

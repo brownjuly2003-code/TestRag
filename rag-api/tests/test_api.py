@@ -8,6 +8,7 @@ from app.main import (
     MistralEmbeddingClient,
     Runtime,
     app,
+    classify_request,
     is_pure_refusal,
 )
 
@@ -40,6 +41,11 @@ def test_is_pure_refusal_handles_mixed_punctuation_in_body():
     assert is_pure_refusal(answer) is False
 
 
+def test_classify_request_distinguishes_contract_question_from_draft_intent():
+    assert classify_request("Какие основания для досрочного расторжения трудового договора?") == "hr"
+    assert classify_request("Подготовь приказ о приеме на работу") == "template_draft"
+
+
 def test_health_endpoint_reports_service_status():
     with TestClient(app) as client:
         response = client.get("/health")
@@ -49,6 +55,8 @@ def test_health_endpoint_reports_service_status():
 
 
 class FakeStore:
+    enabled = True
+
     def __init__(self) -> None:
         self.request_logs = []
         self.feedback = []
@@ -138,6 +146,16 @@ class FakeStore:
             "review_queue_open": 3,
         }
 
+    def retrieval_index_status(self, chunk_count=0):
+        return {
+            "retrieval_mode": "in_memory_hybrid",
+            "vector_sql_index_used": False,
+            "vector_sql_index_present": True,
+            "text_sql_index_present": True,
+            "vector_index_recommended_at_chunks": 10000,
+            "vector_index_recommended": False,
+        }
+
 
 class FakeDocumentPlanner:
     enabled = True
@@ -203,6 +221,23 @@ def runtime_with_store(store: FakeStore, llm=None) -> Runtime:
     )
 
 
+def test_health_endpoint_reports_retrieval_index_status(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["retrieval_mode"] == "in_memory_hybrid"
+    assert body["vector_sql_index_used"] is False
+    assert body["vector_sql_index_present"] is True
+    assert body["text_sql_index_present"] is True
+    assert body["vector_index_recommended_at_chunks"] == 10000
+    assert body["vector_index_recommended"] is False
+
+
 def test_ask_logs_request_and_returns_request_log_id(monkeypatch):
     store = FakeStore()
     monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
@@ -224,6 +259,31 @@ def test_ask_logs_request_and_returns_request_log_id(monkeypatch):
     assert store.request_logs[0]["sources"]
 
 
+def test_ask_template_draft_returns_document_intake_guidance(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/ask",
+            json={
+                "question": "Подготовь приказ об отпуске",
+                "telegram_user_id": "42",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["request_type"] == "template_draft"
+    assert body["refused"] is False
+    assert body["status"] == "needs_human_review"
+    assert "Приказ о предоставлении отпуска" in body["answer"]
+    assert "ФИО работника" in body["answer"]
+    assert "Дата начала отпуска" in body["answer"]
+    assert "не является финальным документом" in body["answer"]
+    assert store.request_logs[0]["request_type"] == "template_draft"
+
+
 def test_ask_marks_llm_insufficient_answer_as_refused(monkeypatch):
     store = FakeStore()
     monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store, llm=FakeInsufficientAnswerClient()))
@@ -232,7 +292,7 @@ def test_ask_marks_llm_insufficient_answer_as_refused(monkeypatch):
         response = client.post(
             "/ask",
             json={
-                "question": "Сделай приказ о приеме на работу",
+                "question": "Какие поля нужны для приказа о приеме на работу?",
                 "telegram_user_id": "42",
             },
         )
@@ -795,6 +855,32 @@ def test_document_type_detection_generates_hiring_order_draft_from_template(monk
     assert "Иванов Иван Иванович" in body["draft_text"]
     assert "Юридический отдел" in body["draft_text"]
     assert "Документ является черновиком" in body["draft_text"]
+
+
+def test_document_type_detection_marks_compose_wording_as_template_draft(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/document/type-detection",
+            json={
+                "question": "Составь приказ об отпуске для Петрова Петра.",
+                "user_provided_fields": {},
+                "available_templates": [
+                    {
+                        "id": "hr_order_vacation_v1",
+                        "document_type": "HR_ORDER_VACATION",
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"] == "template_draft"
+    assert body["document_type"] == "HR_ORDER_VACATION"
+    assert body["can_generate_draft"] is False
 
 
 def test_document_type_detection_generates_vacation_order_draft_from_template(monkeypatch):

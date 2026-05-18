@@ -103,8 +103,9 @@ p:last-child{margin-bottom:0}
 .term:hover .term-def,
 .term:focus .term-def{opacity:1;visibility:visible}
 @media (max-width:600px){
-  .term-def{left:0;transform:none;max-width:280px}
-  .term-def::after{left:20px;transform:none}
+  .term{white-space:normal}
+  .term-def{position:fixed;left:20px;right:20px;top:84px;bottom:auto;transform:none;width:auto;max-width:none}
+  .term-def::after{display:none}
 }
 
 /* ---------- Pipeline ---------- */
@@ -135,6 +136,23 @@ p:last-child{margin-bottom:0}
 .stack-role{font-size:14px;color:var(--muted);line-height:1.45}
 @media (max-width:560px){
   .stack{grid-template-columns:1fr}
+}
+
+/* ---------- Technical notes ---------- */
+.proof-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line-soft);border:1px solid var(--line-soft);border-radius:10px;overflow:hidden;margin:30px 0 0}
+.proof-item{background:var(--bg);padding:16px 18px}
+.proof-value{font-size:24px;line-height:1.1;font-weight:700;letter-spacing:-.015em;margin-bottom:6px;font-feature-settings:var(--tab);font-variant-numeric:tabular-nums lining-nums}
+.proof-label{font-size:13.5px;line-height:1.35;color:var(--muted)}
+.tech-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:30px}
+.tech-note{border-top:1px solid var(--line-soft);padding-top:16px}
+.tech-note h3{font-size:15.5px;line-height:1.35;margin:0 0 7px;font-weight:600;letter-spacing:-.005em}
+.tech-note p{font-size:15px;line-height:1.55;color:var(--muted);margin:0}
+.callout{margin-top:28px;padding:18px 20px;border:1px solid var(--line-soft);border-radius:10px;background:var(--surface)}
+.callout-title{font-size:15px;font-weight:600;margin-bottom:8px}
+.callout p{font-size:15.5px;line-height:1.55;color:var(--ink-2);margin:0}
+@media (max-width:620px){
+  .proof-strip{grid-template-columns:1fr 1fr}
+  .tech-grid{grid-template-columns:1fr;gap:14px}
 }
 
 /* ---------- Facts ---------- */
@@ -170,6 +188,8 @@ footer a:hover{color:var(--ink);border-bottom-color:var(--ink)}
   section{padding:56px 0}
   .bar-row{padding:12px 20px}
   .wrap{padding:0 20px}
+  .facts li{gap:14px}
+  .facts .k{flex-basis:100px}
 }
 </style>
 </head>
@@ -329,8 +349,8 @@ footer a:hover{color:var(--ink);border-bottom-color:var(--ink)}
         <span class="lang-en">Hybrid search</span>
       </div>
       <div class="stack-role">
-        <span class="lang-ru">Векторный поиск + <span class="term" tabindex="0">BM25<span class="term-def lang-ru">Классический алгоритм поиска по словам: учитывает частоту терминов в документе и редкость терминов в коллекции. Хорошо работает на точных формулировках и аббревиатурах.</span><span class="term-def lang-en">A classic word-based ranking algorithm — weighs term frequency in a document against term rarity across the collection. Strong on exact wording and abbreviations.</span></span> + переранжирование по разделам</span>
-        <span class="lang-en">Vector search + <span class="term" tabindex="0">BM25<span class="term-def lang-ru">Классический алгоритм поиска по словам: учитывает частоту терминов в документе и редкость терминов в коллекции. Хорошо работает на точных формулировках и аббревиатурах.</span><span class="term-def lang-en">A classic word-based ranking algorithm — weighs term frequency in a document against term rarity across the collection. Strong on exact wording and abbreviations.</span></span> + section-aware reranking</span>
+        <span class="lang-ru">Семантическая оценка + <span class="term" tabindex="0">BM25<span class="term-def lang-ru">Классический алгоритм поиска по словам: учитывает частоту терминов в документе и редкость терминов в коллекции. Хорошо работает на точных формулировках и аббревиатурах.</span><span class="term-def lang-en">A classic word-based ranking algorithm — weighs term frequency in a document against term rarity across the collection. Strong on exact wording and abbreviations.</span></span> + переранжирование по разделам</span>
+        <span class="lang-en">Semantic score + <span class="term" tabindex="0">BM25<span class="term-def lang-ru">Классический алгоритм поиска по словам: учитывает частоту терминов в документе и редкость терминов в коллекции. Хорошо работает на точных формулировках и аббревиатурах.</span><span class="term-def lang-en">A classic word-based ranking algorithm — weighs term frequency in a document against term rarity across the collection. Strong on exact wording and abbreviations.</span></span> + section-aware reranking</span>
       </div>
     </div>
     <div class="stack-item">
@@ -343,6 +363,168 @@ footer a:hover{color:var(--ink);border-bottom-color:var(--ink)}
         <span class="lang-en">Every query and rating goes into the database — for spotting common cases</span>
       </div>
     </div>
+  </div>
+</section>
+
+<section>
+  <h2>
+    <span class="lang-ru">Техническая реализация</span>
+    <span class="lang-en">Technical implementation</span>
+  </h2>
+  <p>
+    <span class="lang-ru">Это рабочий MVP, а не только концепт: сервисы поднимаются через Docker Compose, n8n остаётся транспортным оркестратором, а вся RAG-логика, форматирование ответов и безопасная подготовка черновиков вынесены в FastAPI.</span>
+    <span class="lang-en">This is a working MVP, not just a concept: services run through Docker Compose, n8n stays as the transport orchestrator, while RAG logic, answer formatting and safe draft preparation live in FastAPI.</span>
+  </p>
+
+  <div class="proof-strip">
+    <div class="proof-item">
+      <div class="proof-value">48</div>
+      <div class="proof-label">
+        <span class="lang-ru">файлов в активном manifest</span>
+        <span class="lang-en">files in the active manifest</span>
+      </div>
+    </div>
+    <div class="proof-item">
+      <div class="proof-value">583</div>
+      <div class="proof-label">
+        <span class="lang-ru">чанка в базе знаний</span>
+        <span class="lang-en">knowledge-base chunks</span>
+      </div>
+    </div>
+    <div class="proof-item">
+      <div class="proof-value">1.00</div>
+      <div class="proof-label">
+        <span class="lang-ru">Hit@5 на golden set</span>
+        <span class="lang-en">Hit@5 on the golden set</span>
+      </div>
+    </div>
+    <div class="proof-item">
+      <div class="proof-value">249</div>
+      <div class="proof-label">
+        <span class="lang-ru">регрессионных теста</span>
+        <span class="lang-en">regression tests</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tech-grid">
+    <div class="tech-note">
+      <h3>
+        <span class="lang-ru">Индексация и метаданные</span>
+        <span class="lang-en">Indexing and metadata</span>
+      </h3>
+      <p>
+        <span class="lang-ru">Документы режутся token-splitter'ом по 500 токенов, сохраняются с file, section, date, source_url, version и embedding. Manifest защищает от случайной индексации всего корпуса.</span>
+        <span class="lang-en">Documents are split into 500-token chunks and stored with file, section, date, source_url, version and embedding metadata. The manifest prevents accidental full-corpus indexing.</span>
+      </p>
+    </div>
+    <div class="tech-note">
+      <h3>
+        <span class="lang-ru">Поиск и уверенность</span>
+        <span class="lang-en">Search and confidence</span>
+      </h3>
+      <p>
+        <span class="lang-ru">На текущем масштабе 583 чанка поиск идёт как in-memory hybrid: FastAPI загружает активные chunks из Postgres и считает embeddings, BM25 и section-aware rerank в процессе. SQL vector index не используется; он нужен при росте корпуса примерно до 10k chunks.</span>
+        <span class="lang-en">At the current 583-chunk scale retrieval runs as in-memory hybrid: FastAPI loads active chunks from Postgres and scores embeddings, BM25 and section-aware reranking in process. The SQL vector index is not used; it becomes useful when the corpus grows to roughly 10k chunks.</span>
+      </p>
+    </div>
+    <div class="tech-note">
+      <h3>
+        <span class="lang-ru">Контур API</span>
+        <span class="lang-en">API surface</span>
+      </h3>
+      <p>
+        <span class="lang-ru">FastAPI отдаёт /ask, /feedback, /history, /metrics, /analytics, /docs/summary, /document/type-detection и /health со статусом retrieval/index. OpenAPI экспортируется для проверки контракта.</span>
+        <span class="lang-en">FastAPI exposes /ask, /feedback, /history, /metrics, /analytics, /docs/summary, /document/type-detection and /health with retrieval/index status. OpenAPI is exported for contract checks.</span>
+      </p>
+    </div>
+    <div class="tech-note">
+      <h3>
+        <span class="lang-ru">Telegram без публичного туннеля</span>
+        <span class="lang-en">Telegram without a public tunnel</span>
+      </h3>
+      <p>
+        <span class="lang-ru">Polling bridge забирает updates у Telegram и передаёт их во внутренний webhook n8n. Доступ ограничен whitelist'ом, секреты лежат в env.</span>
+        <span class="lang-en">A polling bridge pulls Telegram updates and posts them into n8n's internal webhook. Access is whitelist-based, secrets stay in environment variables.</span>
+      </p>
+    </div>
+    <div class="tech-note">
+      <h3>
+        <span class="lang-ru">Черновики документов</span>
+        <span class="lang-en">Document drafts</span>
+      </h3>
+      <p>
+        <span class="lang-ru">Запрос “подготовь приказ...” в Telegram проходит через обычный /ask: API определяет тип документа и возвращает недостающие поля. Полный черновик собирается только кодовым шаблоном: сейчас это приказ о приёме и приказ об отпуске.</span>
+        <span class="lang-en">A “prepare an order...” Telegram request goes through the regular /ask path: the API detects the document type and returns missing fields. A full draft is assembled only through code templates: hiring order and vacation order in the current MVP.</span>
+      </p>
+    </div>
+    <div class="tech-note">
+      <h3>
+        <span class="lang-ru">Наблюдаемость</span>
+        <span class="lang-en">Observability</span>
+      </h3>
+      <p>
+        <span class="lang-ru">В Postgres попадают вопрос, тип запроса, confidence, источники, latency, модель, токены и оценка пользователя. Плохие ответы уходят в review_queue.</span>
+        <span class="lang-en">Postgres stores the question, request type, confidence, sources, latency, model, tokens and user rating. Bad answers go into review_queue.</span>
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>
+    <span class="lang-ru">Что важно для запуска</span>
+    <span class="lang-en">What matters for rollout</span>
+  </h2>
+  <p>
+    <span class="lang-ru">MVP уже показывает end-to-end сценарий, но промышленный запуск зависит от данных и правил эксплуатации: кто владеет корпусом, кто разбирает спорные ответы, какие источники считаются юридически допустимыми.</span>
+    <span class="lang-en">The MVP already demonstrates the end-to-end flow, but production rollout depends on data ownership and operating rules: who owns the corpus, who reviews disputed answers, and which legal sources are acceptable.</span>
+  </p>
+
+  <ul class="facts">
+    <li>
+      <span class="k lang-ru">Данные</span>
+      <span class="k lang-en">Data</span>
+      <span class="v">
+        <span class="lang-ru">Нужен реальный пакет внутренних документов с датами редакций и ответственными владельцами.</span>
+        <span class="lang-en">A real internal document pack is needed, with revision dates and accountable owners.</span>
+      </span>
+    </li>
+    <li>
+      <span class="k lang-ru">Доступ</span>
+      <span class="k lang-en">Access</span>
+      <span class="v">
+        <span class="lang-ru">Для пилота достаточно whitelist Telegram user_id; для этапа 2 нужна ролевая модель HR / Legal / руководитель.</span>
+        <span class="lang-en">Telegram user_id whitelist is enough for the pilot; phase 2 needs HR / Legal / manager role-based access.</span>
+      </span>
+    </li>
+    <li>
+      <span class="k lang-ru">Источники</span>
+      <span class="k lang-en">Sources</span>
+      <span class="v">
+        <span class="lang-ru">Текущий внешний источник — конспект главы 11 ТК РФ с canonical URL. Для production нужен согласованный источник полного актуального текста.</span>
+        <span class="lang-en">The current external source is a Chapter 11 Labour Code summary with a canonical URL. Production needs an agreed source for the full current text.</span>
+      </span>
+    </li>
+    <li>
+      <span class="k lang-ru">Эксплуатация</span>
+      <span class="k lang-en">Ops</span>
+      <span class="v">
+        <span class="lang-ru">Нужен владелец review_queue, лимиты LLM-провайдера и регламент обновления базы знаний.</span>
+        <span class="lang-en">The team needs a review_queue owner, LLM provider limits and a knowledge-base update policy.</span>
+      </span>
+    </li>
+  </ul>
+
+  <div class="callout">
+    <div class="callout-title">
+      <span class="lang-ru">Граница ответственности</span>
+      <span class="lang-en">Responsibility boundary</span>
+    </div>
+    <p>
+      <span class="lang-ru">Ассистент ускоряет поиск и готовит проверяемые черновики, но не заменяет юридическое решение. Любой документ перед подписанием проходит через HR или Legal.</span>
+      <span class="lang-en">The assistant speeds up search and prepares verifiable drafts, but it does not replace legal judgement. Every document is reviewed by HR or Legal before signing.</span>
+    </p>
   </div>
 </section>
 
@@ -365,16 +547,16 @@ footer a:hover{color:var(--ink);border-bottom-color:var(--ink)}
       <span class="k lang-ru">Внешний&nbsp;источник</span>
       <span class="k lang-en">External</span>
       <span class="v">
-        <span class="lang-ru">Конспект главы 11 Трудового кодекса РФ со ссылкой на полный текст в ConsultantPlus — чтобы ассистент мог сослаться на закон, а не пересказывать его.</span>
-        <span class="lang-en">A condensed summary of Chapter 11 of the Russian Labour Code with a link to the full text on ConsultantPlus — so the assistant cites the law instead of paraphrasing it.</span>
+        <span class="lang-ru">Конспект главы 11 Трудового кодекса РФ с canonical URL на ConsultantPlus. Для боевого контура этот файл заменяется полным актуальным текстом из согласованного источника.</span>
+        <span class="lang-en">A summary of Chapter 11 of the Russian Labour Code with a canonical ConsultantPlus URL. In production it is replaced with full current text from an approved source.</span>
       </span>
     </li>
     <li>
       <span class="k lang-ru">Безопасность</span>
       <span class="k lang-en">Safety</span>
       <span class="v">
-        <span class="lang-ru">Готовые юридические тексты собираются только из проверенных шаблонов. Модель никогда не «дописывает» договор от себя — она лишь подсказывает, какой шаблон выбрать.</span>
-        <span class="lang-en">Final legal text is assembled only from approved templates. The model never invents contract wording on its own — it only suggests which template to pick.</span>
+        <span class="lang-ru">Юридически значимые тексты собираются только из проверенных шаблонов. Модель не дописывает формулировки от себя: она помогает выбрать тип документа и недостающие поля.</span>
+        <span class="lang-en">Legally meaningful text is assembled only from approved templates. The model does not invent wording: it helps select the document type and missing fields.</span>
       </span>
     </li>
     <li>

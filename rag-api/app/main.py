@@ -461,6 +461,12 @@ DOCUMENT_TYPES: dict[str, dict[str, Any]] = {
     },
 }
 
+AVAILABLE_CODE_TEMPLATES: list[dict[str, str]] = [
+    {"id": "hr_order_hiring_v1", "document_type": "HR_ORDER_HIRING"},
+    {"id": "hr_order_vacation_v1", "document_type": "HR_ORDER_VACATION"},
+]
+DRAFT_ACTION_MARKERS = ["сделай", "подготов", "состав", "создай", "сформир", "черновик"]
+
 
 def detect_section(text: str) -> str | None:
     for line in text.splitlines():
@@ -542,9 +548,21 @@ def get_runtime() -> Runtime:
 
 def classify_request(question: str) -> str:
     normalized = question.lower()
-    if any(marker in normalized for marker in ["приказ", "шаблон", "договор", "соглашение"]):
+    draft_action = any(
+        marker in normalized
+        for marker in DRAFT_ACTION_MARKERS
+    )
+    template_selection = any(
+        marker in normalized
+        for marker in ["какой шаблон", "какой документ", "какой тип документа", "нужен шаблон"]
+    )
+    document_object = any(
+        marker in normalized
+        for marker in ["приказ", "шаблон", "договор", "соглашение", "доверенность", "претенз", "уведомлен"]
+    )
+    if document_object and (draft_action or template_selection):
         return "template_draft"
-    if any(marker in normalized for marker in ["тк", "работ", "отпуск", "испытан", "увольнен"]):
+    if any(marker in normalized for marker in ["тк", "трудов", "работ", "отпуск", "испытан", "увольнен"]):
         return "hr"
     if any(marker in normalized for marker in ["закон", "статья", "норма", "договор"]):
         return "legal"
@@ -657,7 +675,7 @@ def build_document_type_response(
         )
 
     return DocumentTypeResponse(
-        intent="template_draft" if any(word in request.question.lower() for word in ["сделай", "подготов", "черновик"]) else "document_type_detection",
+        intent="template_draft" if any(word in request.question.lower() for word in DRAFT_ACTION_MARKERS) else "document_type_detection",
         document_type=document_type,
         document_type_label=config["label"],
         confidence=confidence,
@@ -679,6 +697,26 @@ def build_document_type_response(
             else "Тип документа определен. Перед выдачей черновика проверьте шаблон и источники."
         ),
     )
+
+
+def format_document_type_answer(response: DocumentTypeResponse) -> str:
+    lines = [
+        f"**Тип документа:** {response.document_type_label}",
+        response.user_message,
+    ]
+    if response.missing_fields:
+        labels_by_name = {field.name: field.label for field in response.required_fields}
+        lines.append("\nЧтобы подготовить черновик, не хватает:")
+        for name in response.missing_fields:
+            lines.append(f"- {labels_by_name.get(name, name)}")
+    if response.source_requirements:
+        lines.append("\nЧто нужно проверить:")
+        for requirement in response.source_requirements:
+            lines.append(f"- {requirement}")
+    if response.draft_text:
+        lines.extend(["\nЧерновик по кодовому шаблону:", response.draft_text])
+    lines.append("\nЭто не является финальным документом: перед подписанием нужна проверка HR/Legal.")
+    return "\n".join(lines)
 
 
 def build_document_user_prompt(
@@ -943,6 +981,7 @@ def tg_format_answer(request: FormatAnswerRequest) -> FormatAnswerResponse:
 def health() -> dict[str, Any]:
     runtime = get_runtime()
     settings = get_settings()
+    index_status = runtime.store.retrieval_index_status(chunk_count=len(runtime.chunks))
     return {
         "status": "ok",
         "chunk_count": len(runtime.chunks),
@@ -958,6 +997,7 @@ def health() -> dict[str, Any]:
             str(settings.docs_manifest_path) if settings.docs_manifest_path else None
         ),
         "min_confidence": settings.min_confidence,
+        **index_status,
     }
 
 
@@ -983,6 +1023,46 @@ async def ask(request: AskRequest) -> AskResponse:
     confidence = confidence_from_results(results)
     sources = to_sources(results)
     request_type = classify_request(request.question)
+
+    if request_type == "template_draft":
+        document_response = build_document_type_response(
+            DocumentTypeRequest(
+                question=request.question,
+                available_templates=AVAILABLE_CODE_TEMPLATES,
+                top_k=request.top_k,
+            ),
+            to_document_sources(results),
+        )
+        answer = format_document_type_answer(document_response)
+        confidence = 0.7 if document_response.can_generate_draft else (0.34 if sources else 0.0)
+        latency_ms = int((time.perf_counter() - t0) * 1000)
+        request_log_id = runtime.store.log_request(
+            telegram_user_id=request.telegram_user_id,
+            question=request.question,
+            request_type=request_type,
+            confidence=round(confidence, 4),
+            refused=False,
+            answer=answer,
+            sources=[source.model_dump() for source in sources],
+            latency_ms=latency_ms,
+            llm_model=None,
+            prompt_tokens=None,
+            completion_tokens=None,
+        )
+        debug = build_retrieval_debug(request.question, results, query_embedding) if request.debug else None
+        return AskResponse(
+            request_log_id=request_log_id,
+            answer=answer,
+            confidence=round(confidence, 4),
+            confidence_band=compute_confidence_band(confidence),
+            refused=False,
+            request_type=request_type,
+            sources=sources,
+            status="needs_human_review",
+            effective_date_max=latest_effective_date(sources),
+            latency_ms=latency_ms,
+            debug=debug,
+        )
 
     refused = not runtime.policy.can_answer(confidence=confidence, source_count=len(sources))
     usage: dict[str, Any] = {"model": None, "prompt_tokens": None, "completion_tokens": None}

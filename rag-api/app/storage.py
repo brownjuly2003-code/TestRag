@@ -14,6 +14,7 @@ from .rag import DocumentChunk, split_text
 logger = logging.getLogger(__name__)
 
 _DEFAULT_DOC_DATE = "2026-05-15"
+_VECTOR_INDEX_RECOMMENDED_CHUNKS = 10000
 
 
 def _consensus_dim(embeddings: list[list[float] | None]) -> int:
@@ -364,6 +365,47 @@ class PostgresStore:
             "top_refused_questions": top_refused,
             "review_queue_open": queue_open,
         }
+
+    def retrieval_index_status(self, chunk_count: int = 0) -> dict[str, Any]:
+        status: dict[str, Any] = {
+            "retrieval_mode": "in_memory_hybrid",
+            "vector_sql_index_used": False,
+            "vector_sql_index_present": False,
+            "text_sql_index_present": False,
+            "vector_index_recommended_at_chunks": _VECTOR_INDEX_RECOMMENDED_CHUNKS,
+            "vector_index_recommended": chunk_count >= _VECTOR_INDEX_RECOMMENDED_CHUNKS,
+        }
+        if not self.enabled:
+            return status
+
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                select indexname, indexdef
+                from pg_indexes
+                where tablename = 'document_chunks'
+                """
+            )
+            rows = cursor.fetchall()
+
+        definitions = [f"{row[0]} {row[1]}".lower() for row in rows]
+        status["vector_sql_index_present"] = any(
+            "embedding" in definition
+            and (
+                "using ivfflat" in definition
+                or "using hnsw" in definition
+                or "vector_cosine_ops" in definition
+                or "vector_l2_ops" in definition
+                or "vector_ip_ops" in definition
+            )
+            for definition in definitions
+        )
+        status["text_sql_index_present"] = any(
+            "search_vector" in definition and "using gin" in definition
+            for definition in definitions
+        )
+        return status
 
     def log_feedback(
         self,
