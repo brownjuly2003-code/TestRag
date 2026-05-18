@@ -24,9 +24,12 @@ create table if not exists document_chunks (
     created_at timestamptz not null default now()
 );
 
-create index if not exists document_chunks_embedding_idx
-    on document_chunks using ivfflat (embedding vector_cosine_ops)
-    with (lists = 100);
+-- Векторный индекс намеренно не создаём: на текущем масштабе (~600 chunks)
+-- HybridRetriever грузит все chunks в память и считает гибридный score
+-- (BM25 + cosine + section boost) одним проходом — быстрее, чем round-trip
+-- в Postgres. При росте корпуса до ~10k chunks стоит ввести
+-- `ivfflat (embedding vector_cosine_ops) with (lists = sqrt(N))` или HNSW и
+-- переписать retrieval на `ORDER BY embedding <=> %s::vector LIMIT k`.
 
 create index if not exists document_chunks_search_vector_idx
     on document_chunks using gin (search_vector);
