@@ -1,14 +1,14 @@
 {
   "summary": {
-    "total": 10,
-    "answerable_total": 9,
-    "refusal_total": 1,
-    "hit@1": 0.6667,
-    "hit@5": 1.0,
-    "mrr": 0.7815,
-    "refusal_accuracy": 1.0,
-    "avg_latency_ms": 4735,
-    "avg_confidence": 0.7981
+    "total": 30,
+    "answerable_total": 25,
+    "refusal_total": 5,
+    "hit@1": 0.72,
+    "hit@5": 0.96,
+    "mrr": 0.8027,
+    "refusal_accuracy": 0.9,
+    "avg_latency_ms": 5024,
+    "avg_confidence": 0.5735
   },
   "rows": [
     {
@@ -29,11 +29,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 1.0,
-      "latency_ms": 4150,
+      "latency_ms": 4163,
       "hit@1": 1,
       "hit@5": 1,
       "rank": 1,
-      "request_log_id": "32a9ba81-772d-4da9-937c-fa320b8c2346"
+      "request_log_id": "1dcd3efe-4569-4584-9b38-e6180042a31c"
     },
     {
       "q": "Какие документы нужны для отправки dangerous goods авиатранспортом?",
@@ -54,11 +54,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 0.7198,
-      "latency_ms": 4732,
+      "latency_ms": 9279,
       "hit@1": 0,
       "hit@5": 1,
       "rank": 5,
-      "request_log_id": "a0802776-ae45-4abe-919d-632cff3a5e0a"
+      "request_log_id": "dcfc5086-f6c3-407f-abb5-a2975ead4337"
     },
     {
       "q": "Какие основания для досрочного расторжения трудового договора?",
@@ -77,12 +77,12 @@
       "status": "answerable",
       "refused": false,
       "refusal_correct": true,
-      "confidence": 0.4861,
-      "latency_ms": 3952,
+      "confidence": 0.4914,
+      "latency_ms": 7044,
       "hit@1": 0,
       "hit@5": 1,
       "rank": 2,
-      "request_log_id": "ae6d20e4-9208-4702-9143-8d596874dbe9"
+      "request_log_id": "35aa5f19-2b54-40f4-bedd-b69dc472cf13"
     },
     {
       "q": "Что такое AWB и MAWB?",
@@ -95,18 +95,18 @@
         "07_faq_expedition.md",
         "07_faq_expedition.md",
         "05_tlog_contract_transport_road.md",
-        "05_tlog_contract_transport_road.md",
-        "05_tlog_regulation_customs_clearance.md"
+        "05_tlog_regulation_waybill.md",
+        "04_legal_claim_late_delivery.md"
       ],
       "status": "answerable",
       "refused": false,
       "refusal_correct": true,
       "confidence": 1.0,
-      "latency_ms": 1877,
+      "latency_ms": 4134,
       "hit@1": 1,
       "hit@5": 1,
       "rank": 1,
-      "request_log_id": "f921799f-ed40-47e1-90e8-b5da434d8743"
+      "request_log_id": "7dff585c-6925-43a4-b311-4b52e4fd0d74"
     },
     {
       "q": "Какой испытательный срок по ТК РФ?",
@@ -126,11 +126,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 1.0,
-      "latency_ms": 2808,
+      "latency_ms": 1828,
       "hit@1": 1,
       "hit@5": 1,
       "rank": 1,
-      "request_log_id": "5219f908-4212-4553-bec4-5c7113918c83"
+      "request_log_id": "37157b6f-36b1-492f-8621-c584a2ce7141"
     },
     {
       "q": "Какой максимальный размер ULD для авиаперевозки?",
@@ -150,11 +150,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 1.0,
-      "latency_ms": 2837,
+      "latency_ms": 19468,
       "hit@1": 1,
       "hit@5": 1,
       "rank": 1,
-      "request_log_id": "a8e3a797-2b9a-4597-8f4b-9a8f03c8c8bb"
+      "request_log_id": "afcda4b0-a3ce-4479-96ef-9c4cb62374ec"
     },
     {
       "q": "Как составить претензию контрагенту?",
@@ -170,15 +170,15 @@
         "04_legal_claim_non_payment.md",
         "04_legal_claim_defective_goods.md"
       ],
-      "status": "answerable",
+      "status": "needs_human_review",
       "refused": false,
       "refusal_correct": true,
-      "confidence": 0.5754,
-      "latency_ms": 18097,
+      "confidence": 0.34,
+      "latency_ms": 438,
       "hit@1": 1,
       "hit@5": 1,
       "rank": 1,
-      "request_log_id": "e37e9123-7c2a-4a58-b6a0-711934ff5250"
+      "request_log_id": "45e2bb2f-64fd-44fd-bbae-51e098e8bdd8"
     },
     {
       "q": "Какие правила для cutoff time в авиагрузовых перевозках?",
@@ -198,11 +198,11 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 1.0,
-      "latency_ms": 4318,
+      "latency_ms": 2475,
       "hit@1": 0,
       "hit@5": 1,
       "rank": 3,
-      "request_log_id": "dc7995c0-fb6c-49f4-850d-8221cf6cea2e"
+      "request_log_id": "6a74386d-7b15-4b88-8031-48396a27799f"
     },
     {
       "q": "Какие документы нужны для отправки лития морем?",
@@ -212,18 +212,18 @@
         "07_faq_contract_templates.md",
         "01_hr_pol_confidentiality_emp.md",
         "07_faq_contract_templates.md",
-        "07_faq_transport_road.md",
-        "07_faq_claims_procedure.md"
+        "07_faq_claims_procedure.md",
+        "07_faq_transport_road.md"
       ],
       "status": "unanswerable",
       "refused": true,
       "refusal_correct": true,
-      "confidence": 0.209,
-      "latency_ms": 1275,
+      "confidence": 0.2027,
+      "latency_ms": 30195,
       "hit@1": 0,
       "hit@5": 0,
       "rank": null,
-      "request_log_id": "b24ff7e2-9843-4a6d-8659-2942f8e2e15f"
+      "request_log_id": "855c9dda-4c31-4b0f-8385-a8c5c1e20d0a"
     },
     {
       "q": "Что такое GHA?",
@@ -243,11 +243,475 @@
       "refused": false,
       "refusal_correct": true,
       "confidence": 0.9908,
-      "latency_ms": 3310,
+      "latency_ms": 1166,
       "hit@1": 1,
       "hit@5": 1,
       "rank": 1,
-      "request_log_id": "67585c67-bb57-4bb6-8cbf-a13c28ee669b"
+      "request_log_id": "720a7306-c74b-4d25-a5a4-d343edbeca07"
+    },
+    {
+      "q": "Какие условия для удалённой работы по локальному регламенту?",
+      "expected_files": [
+        "01_hr_pol_remote_work",
+        "02_hr_tmp_remote_work"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "02_hr_tmp_remote_work_agreement.md",
+        "02_hr_tmp_remote_work_agreement.md",
+        "01_hr_pol_remote_work.md",
+        "02_hr_tmp_remote_work_agreement.md",
+        "02_hr_tmp_remote_work_agreement.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.8492,
+      "latency_ms": 18382,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "bb79d37b-a62a-41e9-8a2c-1db62159d07d"
+    },
+    {
+      "q": "Какие выплаты положены при увольнении по соглашению сторон?",
+      "expected_files": [
+        "07_faq_dismissal",
+        "01_hr_dismissal_procedure"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "02_hr_tmp_dismissal_order.md",
+        "02_hr_tmp_dismissal_order.md",
+        "07_faq_dismissal.md",
+        "01_hr_dismissal_procedure.md",
+        "07_faq_dismissal.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.7872,
+      "latency_ms": 4820,
+      "hit@1": 0,
+      "hit@5": 1,
+      "rank": 3,
+      "request_log_id": "3627129b-f187-4521-983c-6aafa52ee3ae"
+    },
+    {
+      "q": "Можно ли продлить испытательный срок по ст. 70 ТК РФ?",
+      "expected_files": [
+        "01_hr_probation_procedure",
+        "07_faq_probation",
+        "external_tk_rf_chapter_11"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "01_hr_probation_procedure.md",
+        "07_faq_probation.md",
+        "07_faq_probation.md",
+        "01_hr_probation_procedure.md",
+        "07_faq_probation.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 1.0,
+      "latency_ms": 2079,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "b0fe4816-0b0c-48d7-a8bf-7f95ee82be91"
+    },
+    {
+      "q": "Какие сроки командировки и условия по суточным?",
+      "expected_files": [
+        "01_hr_pol_business_trip"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "01_hr_pol_business_trip.md",
+        "01_hr_pol_business_trip.md",
+        "01_hr_pol_business_trip.md",
+        "01_hr_pol_business_trip.md",
+        "01_hr_pol_business_trip.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.7054,
+      "latency_ms": 3640,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "b1af4845-6a5b-404c-af5e-935f10662695"
+    },
+    {
+      "q": "Что входит в персональные данные по политике компании?",
+      "expected_files": [
+        "06_comp_policy_pdp",
+        "07_faq_pdp"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "06_comp_policy_pdp.md",
+        "06_comp_policy_pdp.md",
+        "06_comp_policy_pdp.md",
+        "06_comp_policy_pdp.md",
+        "06_comp_policy_pdp.md"
+      ],
+      "status": "unanswerable",
+      "refused": true,
+      "refusal_correct": false,
+      "confidence": 0.0,
+      "latency_ms": 1880,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "2ef5fc84-638d-474c-83bc-7f7996aa8147"
+    },
+    {
+      "q": "Какой срок ответа на претензию по поставке?",
+      "expected_files": [
+        "07_faq_claims_procedure",
+        "04_legal_claim_late_delivery",
+        "03_legal_contract_supply_goods"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "03_legal_contract_supply_goods.md",
+        "03_legal_contract_supply_goods.md",
+        "03_legal_contract_supply_goods.md",
+        "03_legal_contract_supply_goods.md",
+        "03_legal_contract_supply_goods.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 1.0,
+      "latency_ms": 2622,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "b097b854-474d-4d82-9550-eb64c71f0b33"
+    },
+    {
+      "q": "Что делать при инциденте с утечкой персональных данных?",
+      "expected_files": [
+        "06_comp_policy_incident_response"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "06_comp_policy_incident_response.md",
+        "06_comp_policy_incident_response.md",
+        "06_comp_policy_pdp.md",
+        "06_comp_policy_incident_response.md",
+        "07_faq_pdp.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 1.0,
+      "latency_ms": 4224,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "f398bbba-45b0-48db-b943-aee287fb0672"
+    },
+    {
+      "q": "Сколько часов в смену может работать водитель?",
+      "expected_files": [
+        "05_tlog_policy_driver_hours"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "01_hr_pol_attendance.md",
+        "05_tlog_policy_driver_hours.md",
+        "01_hr_pol_safety.md",
+        "01_hr_pol_safety.md",
+        "01_hr_pol_safety.md"
+      ],
+      "status": "unanswerable",
+      "refused": true,
+      "refusal_correct": false,
+      "confidence": 0.1549,
+      "latency_ms": 652,
+      "hit@1": 0,
+      "hit@5": 1,
+      "rank": 2,
+      "request_log_id": "410da0d8-2c7a-4380-9fac-a2bc46d495e8"
+    },
+    {
+      "q": "Какие документы оформляются при таможенной очистке?",
+      "expected_files": [
+        "05_tlog_regulation_customs_clearance",
+        "03_legal_contract_customs_broker"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "05_tlog_regulation_customs_clearance.md",
+        "05_tlog_regulation_customs_clearance.md",
+        "03_legal_contract_customs_broker.md",
+        "05_tlog_regulation_customs_clearance.md",
+        "05_tlog_regulation_customs_clearance.md"
+      ],
+      "status": "needs_human_review",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.2666,
+      "latency_ms": 3294,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "bbdcc0f3-6278-49fc-9955-26ebfa507348"
+    },
+    {
+      "q": "Какие штрафные санкции за просрочку поставки товара?",
+      "expected_files": [
+        "04_legal_claim_late_delivery",
+        "03_legal_contract_supply_goods"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "03_legal_contract_supply_goods.md",
+        "05_tlog_regulation_customs_clearance.md",
+        "05_tlog_regulation_waybill.md",
+        "05_tlog_policy_driver_hours.md",
+        "05_tlog_regulation_dangerous_goods.md"
+      ],
+      "status": "needs_human_review",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.2899,
+      "latency_ms": 2797,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "b2d6b7e8-70ae-440f-95ce-592d255e0610"
+    },
+    {
+      "q": "Какие обязательные реквизиты должна содержать транспортная накладная?",
+      "expected_files": [
+        "05_tlog_regulation_waybill"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "05_tlog_regulation_waybill.md",
+        "03_legal_contract_cargo_transport_road.md",
+        "03_legal_contract_expedition_general.md",
+        "01_hr_pol_harassment.md",
+        "05_tlog_regulation_waybill.md"
+      ],
+      "status": "unanswerable",
+      "refused": true,
+      "refusal_correct": false,
+      "confidence": 0.2261,
+      "latency_ms": 627,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "0a7fbe87-8b23-4b83-abf6-ed7a23539338"
+    },
+    {
+      "q": "Каков порядок действий при harassment на рабочем месте?",
+      "expected_files": [
+        "01_hr_pol_harassment"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "01_hr_pol_attendance.md",
+        "01_hr_pol_remote_work.md",
+        "02_hr_tmp_employment_order.md",
+        "01_hr_pol_remote_work.md",
+        "01_hr_pol_remote_work.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.5018,
+      "latency_ms": 1691,
+      "hit@1": 0,
+      "hit@5": 0,
+      "rank": null,
+      "request_log_id": "3f195f82-5b1a-43e9-9781-874a74daf404"
+    },
+    {
+      "q": "Как оформить дополнительное соглашение к трудовому договору?",
+      "expected_files": [
+        "02_hr_tmp_add_agreement",
+        "02_hr_tmp_employment_contract"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "02_hr_tmp_add_agreement.md",
+        "02_hr_tmp_add_agreement.md",
+        "02_hr_tmp_add_agreement.md",
+        "02_hr_tmp_add_agreement.md",
+        "02_hr_tmp_add_agreement.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.9155,
+      "latency_ms": 11099,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "edd3a4d1-4a6d-4913-8c1d-1de7792d1e36"
+    },
+    {
+      "q": "Сколько лет хранятся персональные данные сотрудников?",
+      "expected_files": [
+        "06_comp_policy_data_retention",
+        "06_comp_policy_pdp",
+        "07_faq_pdp"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "07_faq_pdp.md",
+        "07_faq_pdp.md",
+        "07_faq_pdp.md",
+        "07_faq_pdp.md",
+        "07_faq_pdp.md"
+      ],
+      "status": "needs_human_review",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.3033,
+      "latency_ms": 3010,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "5d303d53-a036-4585-a96c-76578f9adad7"
+    },
+    {
+      "q": "Какие документы нужны для автоперевозки опасных грузов?",
+      "expected_files": [
+        "05_tlog_regulation_dangerous_goods",
+        "05_tlog_contract_transport_road"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "03_legal_contract_cargo_transport_road.md",
+        "05_tlog_regulation_waybill.md",
+        "07_faq_expedition.md",
+        "07_faq_transport_road.md",
+        "05_tlog_contract_transport_road.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.5696,
+      "latency_ms": 4623,
+      "hit@1": 0,
+      "hit@5": 1,
+      "rank": 5,
+      "request_log_id": "811078df-86bf-47fe-b6a9-0fbd5ac0050e"
+    },
+    {
+      "q": "Какие условия конфиденциальности обязан соблюдать сотрудник?",
+      "expected_files": [
+        "01_hr_pol_confidentiality_emp",
+        "06_comp_policy_commercial_secret",
+        "02_hr_tmp_employment_contract"
+      ],
+      "expected_refused": false,
+      "top_files": [
+        "02_hr_tmp_employment_contract.md",
+        "02_hr_tmp_employment_contract.md",
+        "02_hr_tmp_employment_contract.md",
+        "01_hr_pol_training.md",
+        "02_hr_tmp_dismissal_order.md"
+      ],
+      "status": "answerable",
+      "refused": false,
+      "refusal_correct": true,
+      "confidence": 0.3753,
+      "latency_ms": 2427,
+      "hit@1": 1,
+      "hit@5": 1,
+      "rank": 1,
+      "request_log_id": "5281a01b-76ec-4203-80fd-0ecff0d8c819"
+    },
+    {
+      "q": "Какая ставка НДФЛ для резидентов в 2026 году?",
+      "expected_files": [],
+      "expected_refused": true,
+      "top_files": [
+        "01_hr_pol_salary.md",
+        "01_hr_pol_salary.md",
+        "01_hr_pol_attendance.md",
+        "01_hr_pol_leave.md",
+        "01_hr_pol_business_trip.md"
+      ],
+      "status": "unanswerable",
+      "refused": true,
+      "refusal_correct": true,
+      "confidence": 0.1537,
+      "latency_ms": 720,
+      "hit@1": 0,
+      "hit@5": 0,
+      "rank": null,
+      "request_log_id": "41b64a01-8de1-4cfc-9e58-9c16bba46ce1"
+    },
+    {
+      "q": "Как оформить шенгенскую визу для сотрудника?",
+      "expected_files": [],
+      "expected_refused": true,
+      "top_files": [
+        "02_hr_tmp_dismissal_order.md",
+        "02_hr_tmp_employment_contract.md",
+        "02_hr_tmp_employment_contract.md",
+        "02_hr_tmp_dismissal_order.md",
+        "external_tk_rf_chapter_11.md"
+      ],
+      "status": "unanswerable",
+      "refused": true,
+      "refusal_correct": true,
+      "confidence": 0.2412,
+      "latency_ms": 616,
+      "hit@1": 0,
+      "hit@5": 0,
+      "rank": null,
+      "request_log_id": "6c036561-27c0-45a9-8215-839a6cae5c64"
+    },
+    {
+      "q": "Какие требования по сертификации ISO 9001?",
+      "expected_files": [],
+      "expected_refused": true,
+      "top_files": [
+        "01_hr_pol_safety.md",
+        "07_faq_claims_procedure.md",
+        "07_faq_claims_procedure.md",
+        "04_legal_claim_cargo_damage.md",
+        "04_legal_claim_defective_goods.md"
+      ],
+      "status": "unanswerable",
+      "refused": true,
+      "refusal_correct": true,
+      "confidence": 0.0604,
+      "latency_ms": 664,
+      "hit@1": 0,
+      "hit@5": 0,
+      "rank": null,
+      "request_log_id": "f086300c-dc3a-4cfe-a117-345f4450e914"
+    },
+    {
+      "q": "Какой курс рубля к евро на сегодня?",
+      "expected_files": [],
+      "expected_refused": true,
+      "top_files": [
+        "01_hr_pol_corruption.md",
+        "01_hr_pol_training.md"
+      ],
+      "status": "unanswerable",
+      "refused": true,
+      "refusal_correct": true,
+      "confidence": 0.0597,
+      "latency_ms": 666,
+      "hit@1": 0,
+      "hit@5": 0,
+      "rank": null,
+      "request_log_id": "b77c924c-f857-47e1-bd04-cefd1a0ac3b6"
     }
   ]
 }

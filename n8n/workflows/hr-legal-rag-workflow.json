@@ -397,7 +397,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const category = $node['Whitelist'].json.category;\nconst chatId = $node['Whitelist'].json.chat_id;\nconst HUMAN_TEXT = 'Ваш запрос направлен HR/Legal на ручную обработку. Ответ придёт от профильного специалиста — сроки зависят от очереди ревью.';\nconst DEFAULT_TEXT = 'Оценка принята.';\nconst text = category === 'human' ? HUMAN_TEXT : DEFAULT_TEXT;\nreturn [{ json: { chat_id: chatId, text } }];"
+        "jsCode": "// Sprint 9: thin proxy на /tg/copy/{key}. Логика — Python (app.tg_copy.feedback_default/human).\nconst category = $node['Whitelist'].json.category;\nconst key = category === 'human' ? 'feedback_human' : 'feedback_default';\nconst resp = await this.helpers.httpRequest({\n  method: 'GET',\n  url: `http://rag-api:8000/tg/copy/${key}`,\n  json: true,\n});\nreturn [{ json: { chat_id: $node['Whitelist'].json.chat_id, text: resp.text } }];\n"
       },
       "id": "format-feedback",
       "name": "Format Feedback",

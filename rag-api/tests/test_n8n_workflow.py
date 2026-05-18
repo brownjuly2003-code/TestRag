@@ -523,35 +523,48 @@ def test_format_docs_includes_sample_file_names():
     assert "<code>01_hr_pol_attendance.md</code>" in text
 
 
-def _run_format_feedback(category: str | None, chat_id: int = 42) -> dict:
-    """Format Feedback node остаётся JS Code (тривиальный — 2 message-string).
-    Тестируется через subprocess node — нет смысла портить такую тривиальщину в Python."""
-    import subprocess  # local import: only this single test path needs subprocess
+def _simulate_format_feedback(category: str | None, chat_id: int = 42) -> dict:
+    """Behavioral simulation of the Format Feedback node:
+    - mirrors the JS branching (category=='human' → feedback_human, else feedback_default);
+    - calls the real /tg/copy/{key} endpoint via TestClient — so any text drift on the API
+      side (e.g. label rename, copy edit) breaks this test, not just the workflow JSON.
+    """
     nodes = _load_nodes()
     code = nodes["Format Feedback"]["parameters"]["jsCode"]
-    script = f"""
-const $node = {{ Whitelist: {{ json: {{ chat_id: {chat_id}, category: {json.dumps(category)} }} }} }};
-const $json = {{}};
-const result = new Function('$json', '$node', {json.dumps(code)})($json, $node);
-console.log(JSON.stringify(result[0].json));
-"""
-    result = subprocess.run(["node", "-e", script], check=True, text=True, capture_output=True)
-    return json.loads(result.stdout)
+    # Structural pin — the node must remain a proxy with the exact branching contract.
+    assert "/tg/copy/" in code, "Format Feedback must call /tg/copy/{key}"
+    assert "feedback_human" in code, "human-handover branch missing"
+    assert "feedback_default" in code, "default branch missing"
+    assert "$node['Whitelist'].json.category" in code, "category must come from Whitelist node"
+    assert "$node['Whitelist'].json.chat_id" in code, "chat_id must come from Whitelist node"
+    assert "httpRequest" in code, "must be HTTP proxy, not inline JS"
+
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    key = "feedback_human" if category == "human" else "feedback_default"
+    with TestClient(app) as client:
+        resp = client.get(f"/tg/copy/{key}")
+        resp.raise_for_status()
+        return {"chat_id": chat_id, "text": resp.json()["text"]}
 
 
-def test_format_feedback_emits_default_text_for_inaccurate_category():
-    out = _run_format_feedback("inaccurate")
+def test_format_feedback_proxy_emits_default_text_for_inaccurate_category():
+    out = _simulate_format_feedback("inaccurate")
+    assert out["chat_id"] == 42
     assert out["text"] == "Оценка принята."
 
 
-def test_format_feedback_emits_human_handover_text_for_human_category():
-    out = _run_format_feedback("human")
+def test_format_feedback_proxy_emits_human_handover_text_for_human_category():
+    out = _simulate_format_feedback("human")
+    assert out["chat_id"] == 42
     assert "HR/Legal" in out["text"]
     assert "ручную обработку" in out["text"]
 
 
-def test_format_feedback_emits_default_text_when_category_missing():
-    out = _run_format_feedback(None)
+def test_format_feedback_proxy_emits_default_text_when_category_missing():
+    out = _simulate_format_feedback(None)
     assert out["text"] == "Оценка принята."
 
 

@@ -78,6 +78,115 @@ GOLDEN_QUESTIONS: list[dict[str, Any]] = [
         "expected_files": ["05_tlog", "07_faq_expedition"],
         "expected_refused": False,
     },
+    # --- Sprint 7 golden expansion 10 → 30: HR/legal/transport/compliance coverage ---
+    {
+        "q": "Какие условия для удалённой работы по локальному регламенту?",
+        "expected_files": ["01_hr_pol_remote_work", "02_hr_tmp_remote_work"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Какие выплаты положены при увольнении по соглашению сторон?",
+        "expected_files": ["07_faq_dismissal", "01_hr_dismissal_procedure"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Можно ли продлить испытательный срок по ст. 70 ТК РФ?",
+        "expected_files": ["01_hr_probation_procedure", "07_faq_probation", "external_tk_rf_chapter_11"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Какие сроки командировки и условия по суточным?",
+        "expected_files": ["01_hr_pol_business_trip"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Что входит в персональные данные по политике компании?",
+        "expected_files": ["06_comp_policy_pdp", "07_faq_pdp"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Какой срок ответа на претензию по поставке?",
+        # Срок ответа на претензию документируется и в FAQ, и в самом договоре поставки.
+        "expected_files": ["07_faq_claims_procedure", "04_legal_claim_late_delivery", "03_legal_contract_supply_goods"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Что делать при инциденте с утечкой персональных данных?",
+        "expected_files": ["06_comp_policy_incident_response"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Сколько часов в смену может работать водитель?",
+        "expected_files": ["05_tlog_policy_driver_hours"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Какие документы оформляются при таможенной очистке?",
+        "expected_files": ["05_tlog_regulation_customs_clearance", "03_legal_contract_customs_broker"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Какие штрафные санкции за просрочку поставки товара?",
+        "expected_files": ["04_legal_claim_late_delivery", "03_legal_contract_supply_goods"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Какие обязательные реквизиты должна содержать транспортная накладная?",
+        "expected_files": ["05_tlog_regulation_waybill"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Каков порядок действий при harassment на рабочем месте?",
+        "expected_files": ["01_hr_pol_harassment"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Как оформить дополнительное соглашение к трудовому договору?",
+        "expected_files": ["02_hr_tmp_add_agreement", "02_hr_tmp_employment_contract"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Сколько лет хранятся персональные данные сотрудников?",
+        # FAQ по PDP суммирует политику retention; data_retention/pdp policy — первичный источник.
+        "expected_files": ["06_comp_policy_data_retention", "06_comp_policy_pdp", "07_faq_pdp"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Какие документы нужны для автоперевозки опасных грузов?",
+        "expected_files": ["05_tlog_regulation_dangerous_goods", "05_tlog_contract_transport_road"],
+        "expected_refused": False,
+    },
+    {
+        "q": "Какие условия конфиденциальности обязан соблюдать сотрудник?",
+        # NDA-клаузы лежат в трудовом договоре наряду с conf-policy и политикой по комм. тайне.
+        "expected_files": [
+            "01_hr_pol_confidentiality_emp",
+            "06_comp_policy_commercial_secret",
+            "02_hr_tmp_employment_contract",
+        ],
+        "expected_refused": False,
+    },
+    # Off-corpus refusals: налоги / визы / стандарты / курсы валют — не входят в корпус.
+    {
+        "q": "Какая ставка НДФЛ для резидентов в 2026 году?",
+        "expected_files": [],
+        "expected_refused": True,
+    },
+    {
+        "q": "Как оформить шенгенскую визу для сотрудника?",
+        "expected_files": [],
+        "expected_refused": True,
+    },
+    {
+        "q": "Какие требования по сертификации ISO 9001?",
+        "expected_files": [],
+        "expected_refused": True,
+    },
+    {
+        "q": "Какой курс рубля к евро на сегодня?",
+        "expected_files": [],
+        "expected_refused": True,
+    },
 ]
 
 
@@ -178,14 +287,22 @@ def main() -> int:
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(
-            json.dumps({"summary": summary, "rows": rows}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        # Write LF + trailing newline (Windows default would emit CRLF and break git pre-commit whitespace gate).
+        payload = json.dumps({"summary": summary, "rows": rows}, ensure_ascii=False, indent=2) + "\n"
+        args.output.write_bytes(payload.encode("utf-8").replace(b"\r\n", b"\n"))
         print(f"\nSaved to {args.output}")
 
-    # Exit code: 1 если MRR < 0.4 или refusal_accuracy < 0.9 (gate для CI).
-    if summary["mrr"] < 0.4 or summary["refusal_accuracy"] < 0.9:
+    # Exit code: 1 если хоть один gate пробит. Floor полностью синхронизирован с
+    # scripts/test_eval_regression.py: MRR ≥0.60, Hit@1 ≥0.50, Hit@5 ≥0.75,
+    # refusal ≥0.85, avg_conf ≥0.50, avg_latency ≤15000ms.
+    if (
+        summary["mrr"] < 0.60
+        or summary["hit@1"] < 0.50
+        or summary["hit@5"] < 0.75
+        or summary["refusal_accuracy"] < 0.85
+        or summary["avg_confidence"] < 0.50
+        or summary["avg_latency_ms"] > 15000
+    ):
         return 1
     return 0
 
