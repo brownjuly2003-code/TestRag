@@ -532,8 +532,8 @@ footer a:hover{color:var(--accent);border-bottom-color:var(--accent)}
         <span class="lang-en">Search and confidence</span>
       </h3>
       <p>
-        <span class="lang-ru">На текущем масштабе 583 чанка поиск идёт как in-memory hybrid: FastAPI загружает активные chunks из Postgres и считает embeddings, BM25 и section-aware rerank в процессе. SQL vector index пока выключен; включается при росте корпуса до ~10k chunks.</span>
-        <span class="lang-en">At the current 583-chunk scale retrieval runs as in-memory hybrid: FastAPI loads active chunks from Postgres and scores embeddings, BM25 and section-aware reranking in process. The SQL vector index is not used; it becomes useful when the corpus grows to roughly 10k chunks.</span>
+        <span class="lang-ru">Векторы и тексты хранятся в Postgres + pgvector. На текущем масштабе 583 чанка поиск идёт как in-memory hybrid: FastAPI забирает активные chunks из БД одним запросом и считает cosine similarity, BM25 и section-aware rerank в памяти процесса. Так быстрее, чем гонять SQL за каждым ответом. Ускоряющий SQL vector index (HNSW) подключится при росте корпуса до ~10k chunks — для меньшего объёма он избыточен.</span>
+        <span class="lang-en">Vectors and texts live in Postgres + pgvector. At the current 583-chunk scale retrieval runs as in-memory hybrid: FastAPI fetches the active chunks from the DB in one query and scores cosine similarity, BM25 and section-aware reranking inside the process — faster than round-tripping SQL on every request. The pgvector SQL index (HNSW) kicks in once the corpus reaches ~10k chunks; below that it is overkill.</span>
       </p>
     </div>
     <div class="tech-note">
