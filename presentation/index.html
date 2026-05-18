@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="ru" data-lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ассистент для поиска по документам</title>
+<meta name="description" content="Telegram-ассистент, который отвечает на внутренние вопросы по корпоративным документам — HR, юридическим, шаблонам и инструкциям.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0a0a'/%3E%3Cpath d='M8 11 L24 11 M8 16 L20 16 M8 21 L24 21' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0a0a0a;
+  --ink-2:#1f1f1f;
+  --muted:#525252;
+  --muted-2:#737373;
+  --line:#e5e5e5;
+  --line-soft:#f0f0f0;
+  --surface:#fafafa;
+  --bg:#ffffff;
+  --accent:#1f1f1f;
+  --tab:"tnum" 1,"lnum" 1;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:17px;line-height:1.65;color:var(--ink);background:var(--bg);
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  font-feature-settings:"ss01","cv11";
+}
+::selection{background:var(--ink);color:#fff}
+.mono{font-family:'JetBrains Mono',ui-monospace,Consolas,monospace;font-size:.92em}
+.num{font-feature-settings:var(--tab);font-variant-numeric:tabular-nums lining-nums}
+
+/* ---------- Language toggle ---------- */
+body[data-lang="ru"] .lang-en{display:none}
+body[data-lang="en"] .lang-ru{display:none}
+body[data-lang="en"]{font-feature-settings:normal}
+
+/* ---------- Top bar ---------- */
+.bar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.94);backdrop-filter:saturate(140%) blur(8px);border-bottom:1px solid var(--line)}
+.bar-row{max-width:880px;margin:0 auto;padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:24px;font-size:14px}
+.bar-title{font-weight:600;letter-spacing:-.01em}
+.bar-title .dim{color:var(--muted);font-weight:400;margin-left:8px}
+.lang-toggle{display:inline-flex;gap:2px;background:var(--line-soft);border-radius:7px;padding:3px;font-size:13px;font-weight:500}
+.lang-toggle button{appearance:none;border:0;background:transparent;color:var(--muted);padding:5px 12px;border-radius:5px;cursor:pointer;font:inherit;letter-spacing:.02em}
+.lang-toggle button[aria-pressed="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+
+/* ---------- Layout ---------- */
+.wrap{max-width:680px;margin:0 auto;padding:0 28px}
+section{padding:72px 0;border-bottom:1px solid var(--line-soft)}
+section:last-of-type{border-bottom:0}
+.hero{padding:96px 0 72px}
+.kicker{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);font-weight:500;margin-bottom:18px}
+h1{font-size:46px;line-height:1.1;letter-spacing:-.025em;font-weight:700;margin:0 0 20px}
+h2{font-size:26px;line-height:1.25;letter-spacing:-.015em;font-weight:600;margin:0 0 24px}
+p{margin:0 0 18px;color:var(--ink-2)}
+p:last-child{margin-bottom:0}
+.lede{font-size:20px;line-height:1.55;color:var(--muted);max-width:580px}
+
+/* ---------- Term hover ---------- */
+.term{
+  position:relative;
+  border-bottom:1px dashed var(--muted-2);
+  cursor:help;
+  white-space:nowrap;
+}
+.term-def{
+  position:absolute;
+  bottom:calc(100% + 10px);
+  left:50%;
+  transform:translateX(-50%);
+  width:max-content;
+  max-width:320px;
+  background:var(--ink);
+  color:#fff;
+  font-size:13.5px;
+  line-height:1.5;
+  font-weight:400;
+  letter-spacing:0;
+  padding:11px 14px;
+  border-radius:8px;
+  white-space:normal;
+  opacity:0;
+  visibility:hidden;
+  transition:opacity .15s ease,visibility .15s ease;
+  pointer-events:none;
+  z-index:10;
+  text-align:left;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);
+}
+.term-def::after{
+  content:'';
+  position:absolute;
+  top:100%;
+  left:50%;
+  transform:translateX(-50%);
+  border:6px solid transparent;
+  border-top-color:var(--ink);
+}
+.term:hover .term-def,
+.term:focus .term-def{opacity:1;visibility:visible}
+@media (max-width:600px){
+  .term-def{left:0;transform:none;max-width:280px}
+  .term-def::after{left:20px;transform:none}
+}
+
+/* ---------- Pipeline ---------- */
+.steps{counter-reset:step;margin:32px 0 0;padding:0;list-style:none}
+.step{position:relative;padding:0 0 28px 56px;counter-increment:step}
+.step:last-child{padding-bottom:0}
+.step::before{
+  content:counter(step);
+  position:absolute;left:0;top:0;
+  width:34px;height:34px;border-radius:50%;
+  background:var(--ink);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:600;
+  font-feature-settings:var(--tab);
+}
+.step::after{
+  content:'';position:absolute;left:17px;top:36px;bottom:6px;width:1px;background:var(--line);
+}
+.step:last-child::after{display:none}
+.step-title{font-weight:600;font-size:17px;margin:5px 0 6px;letter-spacing:-.005em}
+.step p{margin:0;font-size:16px;color:var(--ink-2);line-height:1.6}
+
+/* ---------- Stack grid ---------- */
+.stack{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line-soft);border:1px solid var(--line-soft);border-radius:10px;overflow:hidden;margin-top:28px}
+.stack-item{background:var(--bg);padding:18px 20px}
+.stack-name{font-weight:600;font-size:15px;letter-spacing:-.005em;margin-bottom:4px}
+.stack-name .mono{color:var(--ink)}
+.stack-role{font-size:14px;color:var(--muted);line-height:1.45}
+@media (max-width:560px){
+  .stack{grid-template-columns:1fr}
+}
+
+/* ---------- Facts ---------- */
+.facts{margin:24px 0 0;padding:0;list-style:none}
+.facts li{
+  padding:14px 0;
+  border-top:1px solid var(--line-soft);
+  display:flex;gap:18px;align-items:baseline;
+  font-size:16px;
+}
+.facts li:first-child{border-top:0;padding-top:0}
+.facts .k{flex:0 0 96px;color:var(--muted);font-size:13.5px;letter-spacing:.02em}
+.facts .v{flex:1;color:var(--ink-2)}
+
+/* ---------- Examples ---------- */
+.examples{margin:28px 0 0;padding:20px 22px;background:var(--surface);border-radius:10px;border:1px solid var(--line-soft)}
+.examples-label{font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);font-weight:500;margin-bottom:12px}
+.examples ul{margin:0;padding:0;list-style:none}
+.examples li{padding:7px 0;color:var(--ink-2);font-size:16px;line-height:1.5}
+.examples li::before{content:'— ';color:var(--muted-2)}
+
+/* ---------- Footer ---------- */
+footer{padding:48px 0 64px;color:var(--muted);font-size:14px}
+footer .row{display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap}
+footer a{color:var(--muted);border-bottom:1px solid var(--line)}
+footer a:hover{color:var(--ink);border-bottom-color:var(--ink)}
+
+@media (max-width:600px){
+  h1{font-size:36px}
+  h2{font-size:22px}
+  .lede{font-size:18px}
+  .hero{padding:64px 0 48px}
+  section{padding:56px 0}
+  .bar-row{padding:12px 20px}
+  .wrap{padding:0 20px}
+}
+</style>
+</head>
+<body data-lang="ru">
+
+<div class="bar">
+  <div class="bar-row">
+    <div class="bar-title">
+      <span class="lang-ru">Ассистент для поиска</span><span class="lang-en">Document search assistant</span><span class="dim lang-ru">Telegram · корпоративные документы</span><span class="dim lang-en">Telegram · internal documents</span>
+    </div>
+    <div class="lang-toggle" role="group" aria-label="Language">
+      <button type="button" data-lang-btn="ru" aria-pressed="true">RU</button>
+      <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+
+<section class="hero">
+  <div class="kicker">
+    <span class="lang-ru">Поиск и ответы по корпоративным документам</span>
+    <span class="lang-en">Search and answers across internal documents</span>
+  </div>
+  <h1>
+    <span class="lang-ru">Ассистент для поиска<br>по документам</span>
+    <span class="lang-en">A search assistant for<br>your documents</span>
+  </h1>
+  <p class="lede">
+    <span class="lang-ru">Сотрудник задаёт вопрос в Telegram. Ассистент находит ответ в корпоративных правилах, инструкциях и шаблонах — и показывает, из какого файла он его взял.</span>
+    <span class="lang-en">An employee asks a question in Telegram. The assistant finds the answer inside corporate rules, manuals and templates — and shows exactly which file it came from.</span>
+  </p>
+</section>
+
+<section>
+  <h2>
+    <span class="lang-ru">В двух словах</span>
+    <span class="lang-en">At a glance</span>
+  </h2>
+  <p>
+    <span class="lang-ru">Это не общий чат-бот и не поисковик по интернету. Ассистент отвечает только по той базе документов, которую ему дали: внутренние правила, нормативные акты, юридические шаблоны, инструкции по работе с клиентами и грузами.</span>
+    <span class="lang-en">This is not a general chatbot and not an internet search engine. The assistant answers only from the document base it was given: internal policies, regulations, legal templates, and customer/cargo handling manuals.</span>
+  </p>
+  <p>
+    <span class="lang-ru">Если в документах нет ответа или ассистент не уверен — он честно говорит «не знаю» и не придумывает текст. Пользователь сразу видит, что вопрос требует человека.</span>
+    <span class="lang-en">If the documents don't contain an answer, or confidence is low — the assistant says so honestly and refuses to invent text. The user sees right away that the question needs a human.</span>
+  </p>
+  <div class="examples">
+    <div class="examples-label">
+      <span class="lang-ru">Примеры вопросов</span>
+      <span class="lang-en">Sample questions</span>
+    </div>
+    <ul class="lang-ru">
+      <li>Сколько дней дополнительного отпуска положено сотруднику с тремя детьми?</li>
+      <li>Какой шаблон договора использовать для разового подрядчика?</li>
+      <li>Что делать, если груз пришёл с повреждённой упаковкой?</li>
+      <li>Нужен ли приказ при переводе сотрудника на другую должность?</li>
+    </ul>
+    <ul class="lang-en">
+      <li>How many extra vacation days is an employee with three children entitled to?</li>
+      <li>Which contract template should I use for a one-off contractor?</li>
+      <li>What's the procedure if cargo arrives with damaged packaging?</li>
+      <li>Do we need a formal order to transfer an employee to another role?</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>
+    <span class="lang-ru">Как устроен</span>
+    <span class="lang-en">How it works</span>
+  </h2>
+  <p>
+    <span class="lang-ru">Ассистент работает по принципу <span class="term" tabindex="0">RAG<span class="term-def lang-ru">Retrieval-Augmented Generation — подход, при котором ассистент сначала находит подходящие куски документов, и только потом формулирует ответ — строго по этим кускам. За счёт этого он не сочиняет и всегда может показать источник.</span><span class="term-def lang-en">Retrieval-Augmented Generation — the assistant first finds matching document fragments, then writes its answer strictly from them. As a result it can't invent text and can always show its sources.</span></span> — ответы строятся с опорой на найденные документы. Три шага:</span>
+    <span class="lang-en">The assistant follows the <span class="term" tabindex="0">RAG<span class="term-def lang-ru">Retrieval-Augmented Generation — подход, при котором ассистент сначала находит подходящие куски документов, и только потом формулирует ответ — строго по этим кускам. За счёт этого он не сочиняет и всегда может показать источник.</span><span class="term-def lang-en">Retrieval-Augmented Generation — the assistant first finds matching document fragments, then writes its answer strictly from them. As a result it can't invent text and can always show its sources.</span></span> pattern — retrieve, then generate. Three steps:</span>
+  </p>
+
+  <ol class="steps">
+    <li class="step">
+      <div class="step-title">
+        <span class="lang-ru">Разбираем документы заранее</span>
+        <span class="lang-en">Preparing the documents</span>
+      </div>
+      <p>
+        <span class="lang-ru">Большие тексты режутся на небольшие куски — примерно по абзацу. Каждому куску считается числовой «отпечаток смысла» — <span class="term" tabindex="0">эмбеддинг<span class="term-def lang-ru">Embedding — вектор примерно из тысячи чисел, описывающий смысл фрагмента текста. Чем ближе два вектора друг к другу, тем ближе смысл.</span><span class="term-def lang-en">Embedding — a vector of roughly a thousand numbers describing the meaning of a text fragment. The closer two vectors are, the closer the meanings.</span></span>. Тексты и их отпечатки складываются в базу.</span>
+        <span class="lang-en">Long documents are sliced into short pieces — roughly a paragraph each. Every piece gets a numeric "meaning fingerprint" — an <span class="term" tabindex="0">embedding<span class="term-def lang-ru">Вектор примерно из тысячи чисел, описывающий смысл фрагмента текста. Чем ближе векторы, тем ближе смысл.</span><span class="term-def lang-en">A vector of hundreds of numbers describing the meaning of a text fragment. The closer two vectors are, the closer the meanings.</span></span>. Pieces and their embeddings are stored in the database.</span>
+      </p>
+    </li>
+    <li class="step">
+      <div class="step-title">
+        <span class="lang-ru">Ищем подходящее на каждый запрос</span>
+        <span class="lang-en">Searching on every query</span>
+      </div>
+      <p>
+        <span class="lang-ru">Для вопроса пользователя ассистент одновременно ищет похожие по смыслу куски (через сравнение отпечатков) и куски, в которых встречаются нужные слова. Такой совмещённый поиск называют <span class="term" tabindex="0">гибридным<span class="term-def lang-ru">Hybrid retrieval — параллельный поиск по смыслу (векторный) и по словам (BM25). Их результаты объединяются с весами, и куски, найденные обоими способами, получают больший вес.</span><span class="term-def lang-en">Hybrid retrieval — running a meaning-based (vector) search and a word-based (BM25) search in parallel, then merging the results. Items found by both win.</span></span>: он находит и переформулированные ответы, и точные термины.</span>
+        <span class="lang-en">For each question the assistant runs two searches in parallel: meaning-based (comparing embeddings) and word-based (looking for matching terms). This combined approach is called <span class="term" tabindex="0">hybrid retrieval<span class="term-def lang-ru">Параллельный поиск по смыслу (векторный) и по словам (BM25). Их результаты объединяются с весами, и куски, найденные обоими способами, получают больший вес.</span><span class="term-def lang-en">Running a meaning-based (vector) search and a word-based (BM25) search in parallel, then merging the results with weights. Pieces found by both methods are scored higher.</span></span> — it catches paraphrased answers and exact terminology alike.</span>
+      </p>
+    </li>
+    <li class="step">
+      <div class="step-title">
+        <span class="lang-ru">Собираем ответ</span>
+        <span class="lang-en">Building the answer</span>
+      </div>
+      <p>
+        <span class="lang-ru">Найденные куски передаются языковой модели с жёстким указанием: отвечать только по этим текстам, никаких догадок. К ответу прикладывается список источников — название файла и раздел. Если уверенности недостаточно, ассистент отказывается отвечать и предлагает обратиться к человеку.</span>
+        <span class="lang-en">The retrieved pieces are passed to a language model with a strict instruction: answer only from these texts, no guessing. The reply includes source references — file name and section. If confidence is too low, the assistant refuses and suggests asking a human.</span>
+      </p>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <h2>
+    <span class="lang-ru">Под капотом</span>
+    <span class="lang-en">Under the hood</span>
+  </h2>
+  <p>
+    <span class="lang-ru">Каждый кирпич выбран осознанно: всё работает на собственном сервере, без внешних SaaS-зависимостей кроме одной модели для эмбеддингов и языковых ответов.</span>
+    <span class="lang-en">Each building block is chosen deliberately: everything runs on a self-hosted server, with no external SaaS dependencies except a single model provider for embeddings and language answers.</span>
+  </p>
+
+  <div class="stack">
+    <div class="stack-item">
+      <div class="stack-name"><span class="mono">Postgres</span> + <span class="term" tabindex="0">pgvector<span class="term-def lang-ru">Расширение Postgres для хранения смысловых отпечатков (эмбеддингов) — не нужна отдельная векторная база, всё лежит в обычной БД.</span><span class="term-def lang-en">A Postgres extension for storing embedding vectors in regular database tables — no need for a separate vector database.</span></span></div>
+      <div class="stack-role">
+        <span class="lang-ru">База документов и их смысловых отпечатков</span>
+        <span class="lang-en">Documents and their meaning fingerprints</span>
+      </div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-name"><span class="mono">FastAPI</span></div>
+      <div class="stack-role">
+        <span class="lang-ru">Сервис, который принимает вопросы и отдаёт ответы</span>
+        <span class="lang-en">The service that takes questions and returns answers</span>
+      </div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-name">
+        <span class="lang-ru">Mistral — модель</span>
+        <span class="lang-en">Mistral — model</span>
+      </div>
+      <div class="stack-role">
+        <span class="lang-ru">Считает эмбеддинги и формулирует тексты ответов</span>
+        <span class="lang-en">Computes embeddings and writes the answer texts</span>
+      </div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-name"><span class="mono">n8n</span> + Telegram</div>
+      <div class="stack-role">
+        <span class="lang-ru">Интерфейс: бот, кнопки оценки, проверка прав доступа</span>
+        <span class="lang-en">Interface: the bot, feedback buttons, access control</span>
+      </div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-name">
+        <span class="lang-ru">Гибридный поиск</span>
+        <span class="lang-en">Hybrid search</span>
+      </div>
+      <div class="stack-role">
+        <span class="lang-ru">Векторный поиск + <span class="term" tabindex="0">BM25<span class="term-def lang-ru">Классический алгоритм поиска по словам: учитывает частоту терминов в документе и редкость терминов в коллекции. Хорошо работает на точных формулировках и аббревиатурах.</span><span class="term-def lang-en">A classic word-based ranking algorithm — weighs term frequency in a document against term rarity across the collection. Strong on exact wording and abbreviations.</span></span> + переранжирование по разделам</span>
+        <span class="lang-en">Vector search + <span class="term" tabindex="0">BM25<span class="term-def lang-ru">Классический алгоритм поиска по словам: учитывает частоту терминов в документе и редкость терминов в коллекции. Хорошо работает на точных формулировках и аббревиатурах.</span><span class="term-def lang-en">A classic word-based ranking algorithm — weighs term frequency in a document against term rarity across the collection. Strong on exact wording and abbreviations.</span></span> + section-aware reranking</span>
+      </div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-name">
+        <span class="lang-ru">Логирование и аналитика</span>
+        <span class="lang-en">Logging and analytics</span>
+      </div>
+      <div class="stack-role">
+        <span class="lang-ru">Все запросы и оценки попадают в базу — для разбора частых случаев</span>
+        <span class="lang-en">Every query and rating goes into the database — for spotting common cases</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>
+    <span class="lang-ru">Что внутри</span>
+    <span class="lang-en">What's inside</span>
+  </h2>
+
+  <ul class="facts">
+    <li>
+      <span class="k lang-ru">База</span>
+      <span class="k lang-en">Corpus</span>
+      <span class="v">
+        <span class="lang-ru">48 документов в активной демо-базе из ~200 в полном корпусе: кадровая политика, юридические шаблоны, нормативы по работе с клиентами и грузами, инструкции.</span>
+        <span class="lang-en">48 documents in the active demo base out of ~200 in the full corpus: HR policies, legal templates, customer-service and cargo-handling procedures, manuals.</span>
+      </span>
+    </li>
+    <li>
+      <span class="k lang-ru">Внешний&nbsp;источник</span>
+      <span class="k lang-en">External</span>
+      <span class="v">
+        <span class="lang-ru">Конспект главы 11 Трудового кодекса РФ со ссылкой на полный текст в ConsultantPlus — чтобы ассистент мог сослаться на закон, а не пересказывать его.</span>
+        <span class="lang-en">A condensed summary of Chapter 11 of the Russian Labour Code with a link to the full text on ConsultantPlus — so the assistant cites the law instead of paraphrasing it.</span>
+      </span>
+    </li>
+    <li>
+      <span class="k lang-ru">Безопасность</span>
+      <span class="k lang-en">Safety</span>
+      <span class="v">
+        <span class="lang-ru">Готовые юридические тексты собираются только из проверенных шаблонов. Модель никогда не «дописывает» договор от себя — она лишь подсказывает, какой шаблон выбрать.</span>
+        <span class="lang-en">Final legal text is assembled only from approved templates. The model never invents contract wording on its own — it only suggests which template to pick.</span>
+      </span>
+    </li>
+    <li>
+      <span class="k lang-ru">Отказ</span>
+      <span class="k lang-en">Refusal</span>
+      <span class="v">
+        <span class="lang-ru">Если уверенность ниже порога — ответ не выдаётся, пользователь видит сообщение «лучше уточнить у человека» и подсказку, к кому обратиться.</span>
+        <span class="lang-en">If confidence drops below a threshold the assistant withholds the answer and shows a "better ask a human" hint with a routing suggestion.</span>
+      </span>
+    </li>
+    <li>
+      <span class="k lang-ru">Обратная&nbsp;связь</span>
+      <span class="k lang-en">Feedback</span>
+      <span class="v">
+        <span class="lang-ru">Под каждым ответом кнопки 👍 / 👎. Плохие ответы автоматически попадают в очередь на ручной разбор.</span>
+        <span class="lang-en">Every answer carries 👍 / 👎 buttons. Negative ratings are automatically routed to a manual-review queue.</span>
+      </span>
+    </li>
+    <li>
+      <span class="k lang-ru">Аналитика</span>
+      <span class="k lang-en">Analytics</span>
+      <span class="v">
+        <span class="lang-ru">Отдельный отчёт показывает частые вопросы, типы запросов и темы, где ассистент чаще всего отказывался отвечать — это подсказка, какие документы стоит дополнить.</span>
+        <span class="lang-en">A dedicated report surfaces frequent questions, request types and topics where the assistant most often refused — a direct cue for what documents to add next.</span>
+      </span>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>
+    <span class="lang-ru">Зачем это нужно</span>
+    <span class="lang-en">Why it matters</span>
+  </h2>
+  <p>
+    <span class="lang-ru">В большой компании ответы на одни и те же кадровые и юридические вопросы тянут на себя время людей, которые могли бы заниматься менее рутинной работой. Сотрудник либо ждёт ответа в чате с коллегой, либо ищет нужный пункт в десятках PDF.</span>
+    <span class="lang-en">In a large company the same HR and legal questions keep eating time from people whose work could be less routine. An employee either waits for a colleague to reply in chat, or hunts for the right clause in dozens of PDFs.</span>
+  </p>
+  <p>
+    <span class="lang-ru">Ассистент берёт на себя именно такие повторяющиеся вопросы — те, ответ на которые уже есть в утверждённых документах. Сложные и редкие случаи остаются за человеком, но к ним он приходит уже подготовленным: ассистент по дороге показывает, какие документы вообще релевантны.</span>
+    <span class="lang-en">The assistant takes over exactly this kind of recurring question — the ones whose answers already live in approved documents. Complex and rare cases remain with humans, but the reviewer starts with the relevant documents already surfaced.</span>
+  </p>
+</section>
+
+<footer class="wrap">
+  <div class="row">
+    <div>
+      <span class="lang-ru">Юлия Едомских · 2026</span>
+      <span class="lang-en">Julia Edomskikh · 2026</span>
+    </div>
+    <div>
+      <span class="lang-ru">Telegram&nbsp;·&nbsp;FastAPI&nbsp;·&nbsp;Postgres&nbsp;·&nbsp;pgvector</span>
+      <span class="lang-en">Telegram&nbsp;·&nbsp;FastAPI&nbsp;·&nbsp;Postgres&nbsp;·&nbsp;pgvector</span>
+    </div>
+  </div>
+</footer>
+
+</main>
+
+<script>
+(function(){
+  const body=document.body;
+  const buttons=document.querySelectorAll('[data-lang-btn]');
+  function setLang(lang){
+    body.setAttribute('data-lang',lang);
+    document.documentElement.setAttribute('lang',lang);
+    buttons.forEach(b=>b.setAttribute('aria-pressed', b.dataset.langBtn===lang ? 'true':'false'));
+    try{localStorage.setItem('lang',lang)}catch(e){}
+  }
+  buttons.forEach(b=>b.addEventListener('click',()=>setLang(b.dataset.langBtn)));
+  let stored=null;try{stored=localStorage.getItem('lang')}catch(e){}
+  if(stored==='ru'||stored==='en')setLang(stored);
+  // Touch support for term tooltips
+  document.querySelectorAll('.term').forEach(t=>{
+    t.addEventListener('click',e=>{
+      if(window.matchMedia('(hover:none)').matches){
+        e.preventDefault();
+        t.focus();
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
