@@ -296,6 +296,75 @@ class PostgresStore:
             "bad_feedback_rate": bad_rate,
         }
 
+    def analytics_breakdown(self, window_hours: int = 168, top_n: int = 10) -> dict[str, Any]:
+        """ТЗ §4: запросы → аналитика для формирования базы знаний и частых кейсов.
+
+        Returns top recurring questions, request_type distribution, refused-question
+        topics (KB-gap signal), and open review queue size.
+        """
+        empty: dict[str, Any] = {
+            "window_hours": window_hours,
+            "top_questions": [],
+            "top_request_types": [],
+            "top_refused_questions": [],
+            "review_queue_open": 0,
+        }
+        if not self.enabled:
+            return empty
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                select lower(btrim(question)) as q, count(*) as c
+                from request_logs
+                where created_at >= now() - make_interval(hours => %s)
+                  and question is not null and btrim(question) <> ''
+                group by lower(btrim(question))
+                order by c desc, q asc
+                limit %s
+                """,
+                (window_hours, top_n),
+            )
+            top_questions = [{"question": r[0], "count": int(r[1])} for r in cursor.fetchall()]
+            cursor.execute(
+                """
+                select coalesce(request_type, 'unknown') as t, count(*) as c
+                from request_logs
+                where created_at >= now() - make_interval(hours => %s)
+                group by coalesce(request_type, 'unknown')
+                order by c desc, t asc
+                limit %s
+                """,
+                (window_hours, top_n),
+            )
+            top_request_types = [{"request_type": r[0], "count": int(r[1])} for r in cursor.fetchall()]
+            cursor.execute(
+                """
+                select lower(btrim(question)) as q, count(*) as c
+                from request_logs
+                where created_at >= now() - make_interval(hours => %s)
+                  and refused = true
+                  and question is not null and btrim(question) <> ''
+                group by lower(btrim(question))
+                order by c desc, q asc
+                limit %s
+                """,
+                (window_hours, top_n),
+            )
+            top_refused = [{"question": r[0], "count": int(r[1])} for r in cursor.fetchall()]
+            cursor.execute(
+                "select count(*) from review_queue where status = 'new'"
+            )
+            queue_row = cursor.fetchone()
+            queue_open = int(queue_row[0]) if queue_row and queue_row[0] is not None else 0
+        return {
+            "window_hours": window_hours,
+            "top_questions": top_questions,
+            "top_request_types": top_request_types,
+            "top_refused_questions": top_refused,
+            "review_queue_open": queue_open,
+        }
+
     def log_feedback(
         self,
         request_log_id: str | None,

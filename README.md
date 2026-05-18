@@ -102,7 +102,7 @@ DOCS_PATH=/app/corpus
 DOCS_MANIFEST_PATH=/app/manifests/MVP_CORPUS_FILES.txt
 ```
 
-Manifest ограничивает индексацию выбранными файлами из `corpus/`, чтобы не отправлять все 200 документов на embeddings при случайном рестарте.
+Manifest ограничивает индексацию выбранными 48 файлами (включая внешний `external_tk_rf_chapter_11.md`) из `corpus/`, чтобы не отправлять все 201 документов на embeddings при случайном рестарте.
 
 3. Поднять сервисы:
 
@@ -274,7 +274,7 @@ flowchart LR
 
 Правила индексации:
 
-- `TokenTextSplitter(chunk_size=500, chunk_overlap=50)`;
+- token-based splitter `cl100k_base`, `chunk_size=500`, `chunk_overlap=75` (отклонение от ТЗ-baseline `chunk_overlap=50` зафиксировано в [ADR-0004](docs/adr/0004-chunk-overlap-75.md) — на корпусе MVP-48 overlap=50 даёт MRR 0.78→0.56, refusal 1.00→0.70);
 - embeddings для каждого чанка;
 - повторный ingest заменяет chunks документа, если его текст изменился;
 - временная ошибка embeddings-провайдера не блокирует health-check и текстовый поиск;
@@ -380,7 +380,7 @@ DOCS_MANIFEST_PATH=
 | API-ключ LLM | Mistral по умолчанию, заменяется на GigaChat / YandexGPT / любой OpenAI-совместимый эндпоинт | Ключ в `.env` (`MISTRAL_API_KEY`) или конфиг альтернативного провайдера |
 | Решение по хранилищу логов | По ТЗ — Supabase ИЛИ Google Sheets. Сейчас Postgres (Supabase-совместимый). Если нужен Sheets — добавим экспортёр | Подтверждение «Supabase OK» или ТЗ на Sheets-коннектор |
 | Хост под self-hosted n8n + Postgres + RAG API | Docker-compose готов, нужны 2 CPU / 4 GB RAM / 20 GB disk и публичный HTTPS для Telegram webhook (или polling-mode bridge) | VM / managed Postgres + Docker host |
-| Реальный пакет внутренних документов | Сейчас 51 файл из открытых источников + ТК РФ гл.11. Замена корпуса — `corpus/` + `manifests/MVP_CORPUS_FILES.txt`, индексация одной командой | Файлы в `.md` / `.pdf` / `.docx`, желательно с метаданными (раздел, дата редакции) |
+| Реальный пакет внутренних документов | Сейчас 48 файлов из открытых источников (включая ТК РФ гл.11 как внешний нормативный источник). Замена корпуса — `corpus/` + `manifests/MVP_CORPUS_FILES.txt`, индексация одной командой | Файлы в `.md` / `.pdf` / `.docx`, желательно с метаданными (раздел, дата редакции) |
 
 ### Открытые вопросы
 

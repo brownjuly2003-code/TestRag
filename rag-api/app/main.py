@@ -156,6 +156,25 @@ class CorpusSummaryResponse(BaseModel):
     total_docs: int
 
 
+class FrequentQuestion(BaseModel):
+    question: str
+    count: int
+
+
+class RequestTypeBreakdown(BaseModel):
+    request_type: str
+    count: int
+
+
+class AnalyticsResponse(BaseModel):
+    """ТЗ §4: запросы → аналитика для базы знаний и частых кейсов."""
+    window_hours: int
+    top_questions: list[FrequentQuestion] = []
+    top_request_types: list[RequestTypeBreakdown] = []
+    top_refused_questions: list[FrequentQuestion] = []
+    review_queue_open: int = 0
+
+
 class MetricsResponse(BaseModel):
     window_hours: int
     total_requests: int
@@ -1121,6 +1140,21 @@ def metrics(window_hours: int = 168) -> MetricsResponse:
     return MetricsResponse(**raw)
 
 
+@app.get("/analytics", response_model=AnalyticsResponse)
+def analytics(window_hours: int = 168, top_n: int = 10) -> AnalyticsResponse:
+    if window_hours <= 0 or window_hours > 24 * 90:
+        raise HTTPException(status_code=400, detail="window_hours must be in (0, 2160]")
+    if top_n <= 0 or top_n > 100:
+        raise HTTPException(status_code=400, detail="top_n must be in (0, 100]")
+    runtime = get_runtime()
+    store = runtime.store
+    if hasattr(store, "analytics_breakdown"):
+        raw = store.analytics_breakdown(window_hours=window_hours, top_n=top_n)
+    else:
+        raw = {"window_hours": window_hours}
+    return AnalyticsResponse(**raw)
+
+
 @app.get("/docs/summary", response_model=CorpusSummaryResponse)
 def docs_summary() -> CorpusSummaryResponse:
     runtime = get_runtime()
@@ -1155,6 +1189,15 @@ async def document_type_detection(request: DocumentTypeRequest) -> DocumentTypeR
         build_document_user_prompt(request, sources),
     )
     if mistral_response:
-        return DocumentTypeResponse.model_validate(mistral_response)
+        # ТЗ §2: LLM не генерирует финальные юридические документы.
+        # draft_text допускается только из code-template ветки build_document_type_response().
+        # LLM-ответ используется как классификатор и reasoning helper — поля черновика стираем.
+        llm_plan = DocumentTypeResponse.model_validate(mistral_response)
+        llm_plan = llm_plan.model_copy(update={
+            "draft_text": None,
+            "can_generate_draft": False,
+            "requires_human_review": True,
+        })
+        return llm_plan
 
     return build_document_type_response(request, sources)

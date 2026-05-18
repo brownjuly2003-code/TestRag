@@ -529,6 +529,56 @@
         }
       }
     },
+    "/analytics": {
+      "get": {
+        "summary": "Analytics",
+        "operationId": "analytics_analytics_get",
+        "parameters": [
+          {
+            "name": "window_hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 168,
+              "title": "Window Hours"
+            }
+          },
+          {
+            "name": "top_n",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "title": "Top N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/docs/summary": {
       "get": {
         "summary": "Docs Summary",
@@ -588,6 +638,49 @@
   },
   "components": {
     "schemas": {
+      "AnalyticsResponse": {
+        "properties": {
+          "window_hours": {
+            "type": "integer",
+            "title": "Window Hours"
+          },
+          "top_questions": {
+            "items": {
+              "$ref": "#/components/schemas/FrequentQuestion"
+            },
+            "type": "array",
+            "title": "Top Questions",
+            "default": []
+          },
+          "top_request_types": {
+            "items": {
+              "$ref": "#/components/schemas/RequestTypeBreakdown"
+            },
+            "type": "array",
+            "title": "Top Request Types",
+            "default": []
+          },
+          "top_refused_questions": {
+            "items": {
+              "$ref": "#/components/schemas/FrequentQuestion"
+            },
+            "type": "array",
+            "title": "Top Refused Questions",
+            "default": []
+          },
+          "review_queue_open": {
+            "type": "integer",
+            "title": "Review Queue Open",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "window_hours"
+        ],
+        "title": "AnalyticsResponse",
+        "description": "ТЗ §4: запросы → аналитика для базы знаний и частых кейсов."
+      },
       "AskRequest": {
         "properties": {
           "question": {
@@ -1515,6 +1608,24 @@
         ],
         "title": "FormatTextResponse"
       },
+      "FrequentQuestion": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "count"
+        ],
+        "title": "FrequentQuestion"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1671,6 +1782,24 @@
           "bad_feedback_rate"
         ],
         "title": "MetricsResponse"
+      },
+      "RequestTypeBreakdown": {
+        "properties": {
+          "request_type": {
+            "type": "string",
+            "title": "Request Type"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_type",
+          "count"
+        ],
+        "title": "RequestTypeBreakdown"
       },
       "RequiredField": {
         "properties": {

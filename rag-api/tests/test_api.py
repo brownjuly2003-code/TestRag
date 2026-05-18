@@ -121,6 +121,23 @@ class FakeStore:
             "bad_feedback_rate": 0.08,
         }
 
+    def analytics_breakdown(self, window_hours=168, top_n=10):
+        return {
+            "window_hours": window_hours,
+            "top_questions": [
+                {"question": "что такое controlled zone?", "count": 5},
+                {"question": "сколько длится испытательный срок?", "count": 3},
+            ][:top_n],
+            "top_request_types": [
+                {"request_type": "knowledge_query", "count": 6},
+                {"request_type": "document_draft", "count": 2},
+            ][:top_n],
+            "top_refused_questions": [
+                {"question": "что такое foo bar?", "count": 2},
+            ][:top_n],
+            "review_queue_open": 3,
+        }
+
 
 class FakeDocumentPlanner:
     enabled = True
@@ -479,6 +496,35 @@ def test_metrics_endpoint_rejects_invalid_window():
     assert response.status_code == 400
 
 
+def test_analytics_endpoint_returns_frequent_cases(monkeypatch):
+    store = FakeStore()
+    monkeypatch.setattr("app.main.get_runtime", lambda: runtime_with_store(store))
+
+    with TestClient(app) as client:
+        response = client.get("/analytics", params={"window_hours": 48, "top_n": 5})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["window_hours"] == 48
+    assert body["review_queue_open"] == 3
+    assert body["top_questions"][0]["question"] == "что такое controlled zone?"
+    assert body["top_questions"][0]["count"] == 5
+    assert body["top_request_types"][0]["request_type"] == "knowledge_query"
+    assert body["top_refused_questions"][0]["count"] == 2
+
+
+def test_analytics_endpoint_rejects_invalid_params():
+    with TestClient(app) as client:
+        response = client.get("/analytics", params={"window_hours": 0})
+    assert response.status_code == 400
+    with TestClient(app) as client:
+        response = client.get("/analytics", params={"top_n": 0})
+    assert response.status_code == 400
+    with TestClient(app) as client:
+        response = client.get("/analytics", params={"top_n": 200})
+    assert response.status_code == 400
+
+
 def test_followup_returns_question_with_section_and_file(monkeypatch):
     store = FakeStore()
     store.request_sources[("rl-1", 0)] = {
@@ -781,3 +827,29 @@ def test_document_type_detection_does_not_return_llm_generated_draft(monkeypatch
     body = response.json()
     assert "LLM свободный черновик" not in body["draft_text"]
     assert "ПРИКАЗ" in body["draft_text"]
+
+
+def test_document_type_detection_llm_fallback_strips_draft_text(monkeypatch):
+    """ТЗ §2: LLM-fallback (когда code-detector вернул UNKNOWN) не должен
+    отдавать draft_text — финальные юр-документы только через code-template."""
+    store = FakeStore()
+    monkeypatch.setattr(
+        "app.main.get_runtime",
+        lambda: runtime_with_store(store, llm=FakeDocumentPlanner()),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/document/type-detection",
+            json={
+                "question": "Расскажи в общих чертах про культуру компании.",
+                "user_provided_fields": {},
+                "available_templates": [],
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["draft_text"] is None, body
+    assert body["can_generate_draft"] is False
+    assert body["requires_human_review"] is True

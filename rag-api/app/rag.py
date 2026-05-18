@@ -20,7 +20,7 @@ import tiktoken
 # golden Qs пострадали). Floor по MRR≥0.60 и refusal≥0.85 при overlap=50 не
 # выдерживается. overlap=75 восстанавливает floor; буква ТЗ соблюдена в духе
 # (TokenTextSplitter cl100k_base 500-токенов), отклонение по overlap зафиксировано
-# в docs/findings/2026-05-17-overlap-50-regression.md и docs/adr/0004-chunk-overlap.md.
+# в docs/findings/2026-05-17-overlap-50-regression.md и docs/adr/0004-chunk-overlap-75.md.
 _CHUNK_ENCODING = tiktoken.get_encoding("cl100k_base")
 CHUNK_SIZE_TOKENS = 500
 CHUNK_OVERLAP_TOKENS = 75
