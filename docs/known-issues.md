@@ -169,14 +169,15 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 | 11 N/A | — | — |
 | 12 n8n login | нет | нет (используем CLI/SQL) |
 | 13 intermittent latency | нет | мониторить |
-| 14 n8n coupling | ✅ RESOLVED (Sprint 6 #1, commit `2e74a17`) | — |
+| 14 n8n coupling | ✅ RESOLVED (Sprint 6 #1 `2e74a17` + Sprint 8 #1 Format Answer port + Sprint 8 #2 Format History/Docs/Feedback port) | — |
 | 15 Windows postgres binding | нет (expose-only workaround) | нет (prod = firewall) |
 | 16 Docker Desktop cold start ≥10мин | нет | poll или принять и defer eval-replay |
 | 17 n8n 1.103.2 CLI import + schema mismatch | да (SQL UPDATE workaround) | да (upgrade n8n или migrate schema) |
-| 18 Sprint 6 #1 partial — HTTP nodes ещё на $env | да (BLOCK_ENV=false override) | да (workflow refactor на credentials) |
+| 18 Sprint 6 #1 partial — HTTP nodes ещё на $env | ✅ RESOLVED 2026-05-17 night ($vars.TELEGRAM_BOT_TOKEN, BLOCK_ENV=true default) | RESOLVED |
 | 19 MIN_CONFIDENCE override drift в .env | да (вернуть к 0.25) | да (.env validate gate) |
+| **20 Sprint 8 #2 Codex-audit closure batch** | ✅ RESOLVED (citation hint in LLM prompt, confidence_band in /ask, /health corpus_path, vector dim mismatch warn, Format History/Docs/Feedback ported) | — |
 
-Демо-готовность: 🟢 retrieval polished (MRR=0.78 на overlap=75 + MIN_CONFIDENCE=0.25), refusal=1.0, content gaps закрыты. Sprint 6 #1/#6/#7 закрыты в session 2026-05-17 (n8n extract, N2 Quick-actions, Prev-N-QA infrastructure). Live TG E2E подтверждён 2026-05-17 EOD (5/6 N1+N2+N3+N4). **Sprint 7 (2026-05-18): polling-mode TG bridge закрыл issues #2 + #10** — публичный URL/тоннель больше не нужен. Production-readiness — Mistral paid tier (issue 7) остаётся единственный hard blocker для prod-сценария.
+Демо-готовность: 🟢 retrieval polished (MRR=0.78 на overlap=75 + MIN_CONFIDENCE=0.25), refusal=1.0, content gaps закрыты. Sprint 6 #1/#6/#7 закрыты в session 2026-05-17 (n8n extract, N2 Quick-actions, Prev-N-QA infrastructure). Live TG E2E подтверждён 2026-05-17 EOD (5/6 N1+N2+N3+N4). **Sprint 7 (2026-05-18): polling-mode TG bridge закрыл issues #2 + #10** — публичный URL/тоннель больше не нужен. **Sprint 8 (2026-05-18 day-2): Format Answer + Format History/Docs/Feedback порт в Python, confidence_band в API, citation hint в Mistral prompt, vector dim mismatch warning, /health показывает corpus_path/manifest_path.** Production-readiness — Mistral paid tier (issue 7) остаётся единственный hard blocker для prod-сценария.
 
 ## 16. Docker Desktop cold start на Win11 + WSL2 = 5-10 минут
 

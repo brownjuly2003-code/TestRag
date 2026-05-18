@@ -61,6 +61,14 @@ UNKNOWN_FEEDBACK_REASON_TEXT = "Неизвестная причина обрат
 UNKNOWN_FEEDBACK_TEXT = "Неизвестная команда обратной связи."
 UNRECOGNIZED_FOLLOWUP_TEXT = "Не удалось распознать запрос на уточнение. Задайте вопрос текстом."
 
+# Sprint 8 #2 (codex-audit#5.1): port Format Feedback (JS, 6 строк) → tg_copy.
+# Telegram-нода n8n теперь подтягивает текст через /tg/copy/{key}.
+FEEDBACK_DEFAULT_TEXT = "Оценка принята."
+FEEDBACK_HUMAN_TEXT = (
+    "Ваш запрос направлен HR/Legal на ручную обработку. Ответ придёт от профильного "
+    "специалиста — сроки зависят от очереди ревью."
+)
+
 
 COPY_BLOCKS: dict[str, str] = {
     "greeting": GREETING_TEXT,
@@ -71,4 +79,6 @@ COPY_BLOCKS: dict[str, str] = {
     "unknown_feedback_reason": UNKNOWN_FEEDBACK_REASON_TEXT,
     "unknown_feedback": UNKNOWN_FEEDBACK_TEXT,
     "unrecognized_followup": UNRECOGNIZED_FOLLOWUP_TEXT,
+    "feedback_default": FEEDBACK_DEFAULT_TEXT,
+    "feedback_human": FEEDBACK_HUMAN_TEXT,
 }

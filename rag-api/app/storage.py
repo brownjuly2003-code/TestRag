@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,18 @@ from psycopg.types.json import Jsonb
 from .rag import DocumentChunk, split_text
 
 
+logger = logging.getLogger(__name__)
+
 _DEFAULT_DOC_DATE = "2026-05-15"
+
+
+def _consensus_dim(embeddings: list[list[float] | None]) -> int:
+    """Most-common non-None embedding length. Возвращает 0 если эмбеддинги
+    пустые/None — тогда mismatch-warn просто не активируется."""
+    lens = [len(e) for e in embeddings if e]
+    if not lens:
+        return 0
+    return max(set(lens), key=lens.count)
 
 
 def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
@@ -92,6 +104,7 @@ class PostgresStore:
                 version = str(frontmatter.get("version") or "v1")
 
                 embeddings = embedding_client.embed_texts(chunks) if chunks else []
+                expected_dim = _consensus_dim(embeddings)
                 for index, chunk_text in enumerate(chunks):
                     metadata = {
                         "file": file_path.name,
@@ -102,6 +115,20 @@ class PostgresStore:
                         "version": version,
                     }
                     embedding = embeddings[index] if index < len(embeddings) else None
+                    # Sprint 8 #2 (codex-audit#6.2): silent dim mismatch отбрасывает
+                    # vector score в zero на retrieval (cosine_similarity → 0). Здесь
+                    # ловим расхождение на этапе ingestion, чтобы оператор увидел
+                    # проблему до запроса. Mixed embedding models / partial vendor
+                    # responses теперь явные в логах.
+                    if embedding is not None and expected_dim and len(embedding) != expected_dim:
+                        logger.warning(
+                            "ingest.dim_mismatch file=%s chunk_idx=%d expected=%d got=%d "
+                            "(possible mixed embedding model)",
+                            file_path.name,
+                            index,
+                            expected_dim,
+                            len(embedding),
+                        )
                     cursor.execute(
                         """
                         insert into document_chunks

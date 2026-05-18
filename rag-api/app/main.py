@@ -26,6 +26,10 @@ from .rag import (
 from .settings import get_settings
 from .storage import PostgresStore
 from . import tg_copy
+from .format_answer import confidence_band as compute_confidence_band
+from .format_answer import format_answer as build_format_answer_parts
+from .tg_format import format_docs as build_docs_summary_text
+from .tg_format import format_history as build_history_text
 from .multiturn import augment_retrieval_query, filter_relevant_prev_qas
 from .tg_classifier import classify as classify_tg_update
 from .tg_classifier import parse_allowed_ids
@@ -104,6 +108,9 @@ class AskResponse(BaseModel):
     request_log_id: str | None = None
     answer: str
     confidence: float
+    # Sprint 8 #2 (codex-audit#5.2): banding в API чтобы UI/API парситли
+    # из одной точки. Values: high|medium|low|none|unknown.
+    confidence_band: str
     refused: bool
     request_type: str
     sources: list[Source]
@@ -179,6 +186,44 @@ class ExpandResponse(BaseModel):
     file: str | None = None
     section: str | None = None
     source_url: str | None = None
+
+
+class FormatAnswerSource(BaseModel):
+    file: str | None = None
+    chunk_id: str | None = None
+    section: str | None = None
+    score: float | None = None
+
+
+class FormatAnswerRequest(BaseModel):
+    """Sprint 8 #1 (issue #14): port n8n `Format Answer` JS → FastAPI.
+
+    Принимает payload, тот же что собирался в n8n из выходов `Ask RAG API` +
+    upstream `Whitelist` (chat_id, user_message_id). Возвращает массив
+    готовых к sendMessage payload'ов (split, balance_tags, keyboard).
+    """
+    answer: str | None = None
+    confidence: float | None = None
+    refused: bool = False
+    sources: list[FormatAnswerSource] = Field(default_factory=list)
+    request_log_id: str = ""
+    chat_id: int | str
+    user_message_id: int | None = None
+
+
+class FormatAnswerPart(BaseModel):
+    chat_id: int | str
+    text: str
+    request_log_id: str = ""
+    is_last: bool
+    part_index: int
+    part_total: int
+    inline_keyboard: dict[str, Any] | None = None
+    reply_to_message_id: int | None = None
+
+
+class FormatAnswerResponse(BaseModel):
+    parts: list[FormatAnswerPart]
 
 
 CORPUS_CATEGORY_LABELS: dict[str, str] = {
@@ -788,15 +833,95 @@ def tg_copy_get(key: str) -> TelegramCopyResponse:
     return TelegramCopyResponse(key=key, text=text)
 
 
+class FormatHistoryItem(BaseModel):
+    id: str | None = None
+    question: str | None = None
+    answer: str | None = None
+    confidence: float | None = None
+    refused: bool = False
+    created_at: str | None = None
+
+
+class FormatHistoryRequest(BaseModel):
+    items: list[FormatHistoryItem] = Field(default_factory=list)
+
+
+class FormatTextResponse(BaseModel):
+    text: str
+
+
+class FormatDocsCategory(BaseModel):
+    category: str | None = None
+    label: str | None = None
+    doc_count: int = 0
+    sample_files: list[str] = Field(default_factory=list)
+
+
+class FormatDocsRequest(BaseModel):
+    categories: list[FormatDocsCategory] = Field(default_factory=list)
+    total_docs: int = 0
+
+
+@app.post("/tg/format-history", response_model=FormatTextResponse)
+def tg_format_history(request: FormatHistoryRequest) -> FormatTextResponse:
+    """Sprint 8 #2 (codex-audit#5.1): port n8n `Format History` JS → FastAPI.
+
+    Принимает массив items из `/history`, возвращает готовый HTML-текст
+    для Telegram sendMessage."""
+    text = build_history_text([item.model_dump() for item in request.items])
+    return FormatTextResponse(text=text)
+
+
+@app.post("/tg/format-docs", response_model=FormatTextResponse)
+def tg_format_docs(request: FormatDocsRequest) -> FormatTextResponse:
+    """Sprint 8 #2 (codex-audit#5.1): port n8n `Format Docs` JS → FastAPI."""
+    text = build_docs_summary_text(
+        [c.model_dump() for c in request.categories],
+        request.total_docs,
+    )
+    return FormatTextResponse(text=text)
+
+
+@app.post("/tg/format-answer", response_model=FormatAnswerResponse)
+def tg_format_answer(request: FormatAnswerRequest) -> FormatAnswerResponse:
+    """Sprint 8 #1 (issue #14): port n8n `Format Answer` JS → FastAPI.
+
+    Заменяет 158-строчный JS Code node на n8n. Workflow обновится отдельно
+    (HTTP Request на этот endpoint вместо Code), до миграции существующий
+    JS-узел остаётся (двухтрактовое покрытие). См. `tests/test_format_answer.py`
+    для parity-coverage против JS-копии.
+    """
+    parts = build_format_answer_parts(
+        answer=request.answer,
+        confidence=request.confidence,
+        refused=request.refused,
+        sources=[s.model_dump(exclude_none=True) for s in request.sources],
+        request_log_id=request.request_log_id,
+        chat_id=request.chat_id,
+        user_message_id=request.user_message_id,
+    )
+    return FormatAnswerResponse(parts=[FormatAnswerPart(**p) for p in parts])
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     runtime = get_runtime()
+    settings = get_settings()
     return {
         "status": "ok",
         "chunk_count": len(runtime.chunks),
         "mistral_enabled": runtime.llm.enabled,
         "embeddings_enabled": runtime.embeddings.enabled,
         "postgres_enabled": runtime.store.enabled,
+        # Sprint 8 #2 (codex-audit#6.3): покажи активные corpus + manifest paths,
+        # чтобы оператор сразу увидел, что подгружен (sample_docs vs corpus) и
+        # был ли применён manifest. Раньше mismatched volume mounts можно было
+        # обнаружить только через chunk_count drift.
+        "docs_path": str(settings.docs_path),
+        "docs_manifest_path": (
+            str(settings.docs_manifest_path) if settings.docs_manifest_path else None
+        ),
+        "min_confidence": settings.min_confidence,
     }
 
 
@@ -854,6 +979,7 @@ async def ask(request: AskRequest) -> AskResponse:
         request_log_id=request_log_id,
         answer=answer,
         confidence=round(confidence, 4),
+        confidence_band=compute_confidence_band(0.0 if refused else confidence),
         refused=refused,
         request_type=request_type,
         sources=sources,

@@ -61,6 +61,92 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /tg/format-history:
+    post:
+      summary: Tg Format History
+      description: 'Sprint 8 #2 (codex-audit#5.1): port n8n `Format History` JS → FastAPI.
+
+
+        Принимает массив items из `/history`, возвращает готовый HTML-текст
+
+        для Telegram sendMessage.'
+      operationId: tg_format_history_tg_format_history_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormatHistoryRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormatTextResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /tg/format-docs:
+    post:
+      summary: Tg Format Docs
+      description: 'Sprint 8 #2 (codex-audit#5.1): port n8n `Format Docs` JS → FastAPI.'
+      operationId: tg_format_docs_tg_format_docs_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormatDocsRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormatTextResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /tg/format-answer:
+    post:
+      summary: Tg Format Answer
+      description: 'Sprint 8 #1 (issue #14): port n8n `Format Answer` JS → FastAPI.
+
+
+        Заменяет 158-строчный JS Code node на n8n. Workflow обновится отдельно
+
+        (HTTP Request на этот endpoint вместо Code), до миграции существующий
+
+        JS-узел остаётся (двухтрактовое покрытие). См. `tests/test_format_answer.py`
+
+        для parity-coverage против JS-копии.'
+      operationId: tg_format_answer_tg_format_answer_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormatAnswerRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormatAnswerResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /health:
     get:
       summary: Health
@@ -355,6 +441,9 @@ components:
         confidence:
           type: number
           title: Confidence
+        confidence_band:
+          type: string
+          title: Confidence Band
         refused:
           type: boolean
           title: Refused
@@ -387,6 +476,7 @@ components:
       required:
       - answer
       - confidence
+      - confidence_band
       - refused
       - request_type
       - sources
@@ -659,6 +749,217 @@ components:
           title: Score
       type: object
       title: FollowupSource
+    FormatAnswerPart:
+      properties:
+        chat_id:
+          anyOf:
+          - type: integer
+          - type: string
+          title: Chat Id
+        text:
+          type: string
+          title: Text
+        request_log_id:
+          type: string
+          title: Request Log Id
+          default: ''
+        is_last:
+          type: boolean
+          title: Is Last
+        part_index:
+          type: integer
+          title: Part Index
+        part_total:
+          type: integer
+          title: Part Total
+        inline_keyboard:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Inline Keyboard
+        reply_to_message_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Reply To Message Id
+      type: object
+      required:
+      - chat_id
+      - text
+      - is_last
+      - part_index
+      - part_total
+      title: FormatAnswerPart
+    FormatAnswerRequest:
+      properties:
+        answer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Answer
+        confidence:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Confidence
+        refused:
+          type: boolean
+          title: Refused
+          default: false
+        sources:
+          items:
+            $ref: '#/components/schemas/FormatAnswerSource'
+          type: array
+          title: Sources
+        request_log_id:
+          type: string
+          title: Request Log Id
+          default: ''
+        chat_id:
+          anyOf:
+          - type: integer
+          - type: string
+          title: Chat Id
+        user_message_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: User Message Id
+      type: object
+      required:
+      - chat_id
+      title: FormatAnswerRequest
+      description: 'Sprint 8 #1 (issue #14): port n8n `Format Answer` JS → FastAPI.
+
+
+        Принимает payload, тот же что собирался в n8n из выходов `Ask RAG API` +
+
+        upstream `Whitelist` (chat_id, user_message_id). Возвращает массив
+
+        готовых к sendMessage payload''ов (split, balance_tags, keyboard).'
+    FormatAnswerResponse:
+      properties:
+        parts:
+          items:
+            $ref: '#/components/schemas/FormatAnswerPart'
+          type: array
+          title: Parts
+      type: object
+      required:
+      - parts
+      title: FormatAnswerResponse
+    FormatAnswerSource:
+      properties:
+        file:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: File
+        chunk_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chunk Id
+        section:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Section
+        score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Score
+      type: object
+      title: FormatAnswerSource
+    FormatDocsCategory:
+      properties:
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+        doc_count:
+          type: integer
+          title: Doc Count
+          default: 0
+        sample_files:
+          items:
+            type: string
+          type: array
+          title: Sample Files
+      type: object
+      title: FormatDocsCategory
+    FormatDocsRequest:
+      properties:
+        categories:
+          items:
+            $ref: '#/components/schemas/FormatDocsCategory'
+          type: array
+          title: Categories
+        total_docs:
+          type: integer
+          title: Total Docs
+          default: 0
+      type: object
+      title: FormatDocsRequest
+    FormatHistoryItem:
+      properties:
+        id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Id
+        question:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Question
+        answer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Answer
+        confidence:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Confidence
+        refused:
+          type: boolean
+          title: Refused
+          default: false
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+      type: object
+      title: FormatHistoryItem
+    FormatHistoryRequest:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/FormatHistoryItem'
+          type: array
+          title: Items
+      type: object
+      title: FormatHistoryRequest
+    FormatTextResponse:
+      properties:
+        text:
+          type: string
+          title: Text
+      type: object
+      required:
+      - text
+      title: FormatTextResponse
     HTTPValidationError:
       properties:
         detail:
