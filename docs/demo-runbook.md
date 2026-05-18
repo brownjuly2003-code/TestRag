@@ -91,56 +91,27 @@ where id='testrag-hr-legal-assistant';
 
 Ожидаемо: `feedback_false=Direct Reply?`, `direct_reply_true=Send Direct Reply`, `direct_reply_false=Ask RAG API`.
 
-## Локальный Telegram Webhook
+## Telegram polling-мост
 
-Telegram не отправляет webhook на `localhost`. Для live-demo нужен публичный HTTPS tunnel:
+Публичный HTTPS-туннель больше не нужен. Telegram-интерфейс работает через polling: `services/tg_poll_bridge/main.py` (Python, ~150 строк, stdlib-only) забирает обновления у Telegram API через `getUpdates` и POSTит их во внутренний webhook n8n.
 
-- Cloudflare Tunnel;
-- ngrok;
-- другой временный HTTPS endpoint.
-
-После получения HTTPS URL записать его в `.env`:
-
-```env
-N8N_WEBHOOK_URL=https://your-tunnel-url/
-```
-
-Затем перезапустить n8n:
+Старт моста и проверка статуса:
 
 ```powershell
-docker compose up -d n8n
+docker compose up -d tg_poll_bridge
+docker logs testrag-tg_poll_bridge-1 --tail 20
 ```
 
-Для быстрого временного tunnel можно использовать Cloudflare Tunnel в Docker:
+Ожидаемо: в логах строки вида `polling offset=N updates=K`, без 4xx/5xx от Telegram API.
+
+Проверить, что webhook у Telegram отключён (polling и webhook несовместимы):
 
 ```powershell
-docker run -d --name testrag-cloudflared --network testrag_default cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://n8n:5678
-docker logs testrag-cloudflared
-```
-
-В логах найти URL вида `https://...trycloudflare.com`, записать его в `N8N_WEBHOOK_URL` и перезапустить n8n.
-
-**NB: trycloudflare URLs эфемерные.** При остановке контейнера `testrag-cloudflared` или его пересоздании URL **меняется**. После каждого рестарта tunnel:
-
-1. Удалить старый контейнер: `docker rm -f testrag-cloudflared`.
-2. Запустить новый: команда из блока выше.
-3. Извлечь новый URL: `docker logs testrag-cloudflared 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -1`.
-4. Заменить `N8N_WEBHOOK_URL` в `.env` на новый URL (со слешем в конце).
-5. Пересоздать n8n: `docker compose up -d --force-recreate n8n`. n8n при старте регистрирует Telegram webhook автоматически.
-6. Проверить, что Telegram видит новый webhook (без вывода токена):
-
-```powershell
-# не выводит токен в чат; читает .env, делает getWebhookInfo и печатает host + last_error
-$env_text = Get-Content .env -Raw
-$token = ([regex]::Match($env_text, 'TELEGRAM_BOT_TOKEN=(\S+)')).Groups[1].Value
+$token = ([regex]::Match((Get-Content .env -Raw), 'TELEGRAM_BOT_TOKEN=(\S+)')).Groups[1].Value
 $info = Invoke-RestMethod -Uri "https://api.telegram.org/bot$token/getWebhookInfo"
-$host_only = ($info.result.url -replace "/bot$token/", "/bot***/")
-"webhook host: $($info.result.url.Split('/bot')[0])"
+"webhook url: '$($info.result.url)' (должно быть пустым при polling-режиме)"
 "pending: $($info.result.pending_update_count)"
-"last_error: $($info.result.last_error_message)"
 ```
-
-Ожидаемо: host совпадает с актуальным `*.trycloudflare.com`, pending=0, last_error пустой.
 
 ## Whitelist Telegram
 

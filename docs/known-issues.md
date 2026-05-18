@@ -112,7 +112,7 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 
 **Trade-off**: ~5s polling latency vs мгновенный webhook. Для MVP HR/legal demo приемлемо.
 
-**Fallback (если когда-то нужен публичный URL)**: cloudflared/ngrok scripts в `docs/demo-runbook.md` остались, но более не required.
+**Fallback**: при необходимости публичного URL можно поднять отдельный туннель и переключить n8n обратно на webhook-режим. Не описано в runbook.
 
 ## 11. Workflow .ready vs editing races (CX-related)
 
@@ -128,7 +128,7 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 
 **Симптом**: От «Что такое controlled zone?» (1:47 AM) до ответа (1:59 AM) прошло 12 минут.
 
-**Root cause**: Подозрение на Mistral 429 retry с длинным backoff в `requests` или `httpx` client. Параллельно — n8n execution 17 показал реальный runtime 8.7 сек. Скорее всего: Cloudflare tunnel пересоздался, TG webhook задержался с доставкой, либо Mistral free tier забекдоффил.
+**Root cause**: Подозрение на Mistral 429 retry с длинным backoff в `requests` или `httpx` client. Параллельно — n8n execution 17 показал реальный runtime 8.7 сек. Наиболее вероятно — Mistral free tier забекдоффил, либо был всплеск polling latency у `tg_poll_bridge`.
 
 **Status**: INTERMITTENT, не воспроизводится стабильно. Если повторится — добавить timing в логах rag-api.
 
@@ -200,7 +200,7 @@ docker compose build rag-api && docker compose up -d --force-recreate rag-api
 docker compose up -d --force-recreate rag-api
 python scripts/eval_retrieval.py --output eval/baseline.json
 python scripts/eval_multiturn.py --output .tmp/eval_multiturn.json
-python scripts/smoke_tg_e2e.py   # требует cloudflared up + webhook re-registered
+python scripts/smoke_tg_e2e.py   # требует tg_poll_bridge up (polling-режим)
 ```
 
 ## 17. n8n 1.103.2 CLI `import:workflow` + DB schema mismatch

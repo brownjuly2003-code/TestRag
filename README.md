@@ -133,13 +133,7 @@ n8n/workflows/hr-legal-rag-workflow.json
 
 Telegram credentials настраиваются в UI n8n. Токен не хранится в workflow JSON.
 
-Для live Telegram-demo локальный n8n должен быть доступен по публичному HTTPS URL. Использовать Cloudflare Tunnel или ngrok, затем записать URL в `.env`:
-
-```env
-N8N_WEBHOOK_URL=https://example-tunnel-url/
-```
-
-После изменения `N8N_WEBHOOK_URL` перезапустить n8n.
+Telegram-интерфейс работает в polling-режиме через локальный мост `services/tg_poll_bridge/` — публичный HTTPS-туннель не требуется. Бот забирает обновления у Telegram API через `getUpdates` и POSTит их во внутренний webhook n8n. Подробности в `docs/demo-runbook.md`.
 
 ## Структура проекта
 
@@ -152,7 +146,6 @@ TestRag/
   manifests/MVP_CORPUS_FILES.txt
   docs/demo-runbook.md
   docs/legal-document-prompts.md
-  docs/next-session.md
   n8n/workflows/hr-legal-rag-workflow.json
   rag-api/app/
   rag-api/tests/
@@ -162,7 +155,6 @@ TestRag/
 
 - [Demo Runbook](docs/demo-runbook.md) - как показать локальное демо.
 - [Legal Document Prompts](docs/legal-document-prompts.md) - большой prompt для определения типа юр/HR-документа и безопасной подготовки черновика.
-- [Next Session](docs/next-session.md) - готовый текст для продолжения работы в следующей сессии.
 
 ## Текущий статус реализации
 
@@ -194,7 +186,7 @@ Eval baseline (overlap=75, min_conf=0.25): MRR=0.78 Hit@1=0.67 Hit@5=1.00 refusa
 - Текущий расширенный MVP-корпус: `DOCS_PATH=/app/corpus`, `DOCS_MANIFEST_PATH=/app/manifests/MVP_CORPUS_FILES.txt`. `chunk_count` пересчитывается при следующем ingest после aviation pass.
 - Aviation pass 2026-05-16: 200 corpus-файлов перепрофилированы под авиагрузовую компанию (AWB/MAWB/HAWB, controlled zone, aviation security, dangerous goods). Roadmap в `aviation-corpus-tasks/`. Все структурные инварианты `=0`; aviation coverage 100%.
 - Тесты: `python -m pytest -p no:schemathesis` -> `68 passed` (+12 Sprint 1 bot-UX, +6 hotfixes MD→HTML/$node, +14 Sprint 2 /help /clear /history /docs + M7 schema, +5 split+balance+TG 4096-cap).
-- Документация известных проблем: `docs/known-issues.md` (13 issues с workaround/fix status), `docs/findings/` (deep-dives), `docs/next-session.md` (Sprint 3 backlog с детальным планом N1).
+- Документация известных проблем: `docs/known-issues.md` (issues с workaround/fix status), `docs/findings/` (deep-dives по конкретным проблемам retrieval/n8n).
 - Mistral подключается через env. Если `MISTRAL_API_KEY` пустой, API возвращает grounded extractive answer по найденным источникам; если embeddings API временно отвечает HTTP-ошибкой, RAG продолжает работать через текстовый retrieval.
 - Корпус по испытательному сроку приведен в соответствие со ст. 70 ТК РФ: продление испытательного срока не допускается, периоды отсутствия не включаются в срок испытания.
 
