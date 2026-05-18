@@ -158,7 +158,7 @@ TestRag/
 
 ## Текущий статус реализации
 
-Updated: 2026-05-17 (Sprint 6 #1/#6/#7 closed, overlap rolled back к ТЗ).
+Updated: 2026-05-18 (draft-flow/presentation polish; Sprint 6 notes below).
 
 ### Свежие изменения 2026-05-17
 - **chunk_overlap финал = 75** (commit `52ed0a5`, ADR-0004): eval replay при overlap=50 показал floor-violation (MRR 0.78→0.56). Rollback к 75 с обоснованием в `docs/adr/0004-chunk-overlap-75.md`. MIN_CONFIDENCE drift 0.35→0.25 (issue #19).
@@ -169,7 +169,7 @@ Updated: 2026-05-17 (Sprint 6 #1/#6/#7 closed, overlap rolled back к ТЗ).
 - **`/expand` HTML escape** (commit `8d7adf2`): chunk.content шёл в f-string без `html.escape` → TG 400 "can't parse entities" на chunks с `<https://...>` (autolinks) и `M&A`/`P&L`. Latent bug, +regression тест.
 - **Sprint 6 #7 — Prev-N-QA infrastructure** (commit `50699fe`): `AskRequest.prev_qa_count` opt-in (0..5). Augmented retrieval query, LLM prompt не augmented. Live A/B: ΔHit@5=+0.20 (commit `52ed0a5`); default остаётся opt-in.
 
-pytest: **193/193** зелёные. Live TG E2E smoke: **6/6 ✓**.
+pytest: **249/249** зелёные. Live TG E2E smoke: **6/6 ✓**.
 Eval baseline (overlap=75, min_conf=0.25): MRR=0.78 Hit@1=0.67 Hit@5=1.00 refusal_accuracy=1.00 avg_conf=0.80.
 
 - Добавлен RAG API на FastAPI.

@@ -59,6 +59,10 @@ h2{font-size:26px;line-height:1.25;letter-spacing:-.015em;font-weight:600;margin
 p{margin:0 0 18px;color:var(--ink-2)}
 p:last-child{margin-bottom:0}
 .lede{font-size:20px;line-height:1.55;color:var(--muted);max-width:580px}
+.hero-metric{margin-top:28px;display:inline-grid;grid-template-columns:auto auto auto;align-items:center;gap:10px;font-size:14px;color:var(--muted)}
+.hero-metric > span:not(.arrow){display:inline-grid;gap:2px}
+.hero-metric strong{font-size:18px;color:var(--ink);font-weight:700;font-feature-settings:var(--tab);font-variant-numeric:tabular-nums lining-nums}
+.hero-metric .arrow{color:var(--muted-2)}
 
 /* ---------- Term hover ---------- */
 .term{
@@ -174,6 +178,52 @@ p:last-child{margin-bottom:0}
 .examples li{padding:7px 0;color:var(--ink-2);font-size:16px;line-height:1.5}
 .examples li::before{content:'— ';color:var(--muted-2)}
 
+/* ---------- Product screenshot ---------- */
+.product-shot{display:grid;grid-template-columns:minmax(260px,320px) 1fr;gap:28px;align-items:start;margin-top:30px}
+.phone-shot{border:1px solid var(--line);border-radius:24px;background:#eef3f6;padding:12px;box-shadow:0 18px 42px rgba(0,0,0,.10)}
+.phone-screen{border-radius:18px;background:#f7fafb;overflow:hidden;border:1px solid rgba(0,0,0,.06)}
+.phone-top{background:#fff;padding:12px 14px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:10px}
+.phone-avatar{width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.phone-name{font-size:14px;font-weight:600;line-height:1.2}
+.phone-status{font-size:12px;color:var(--muted)}
+.chat{padding:14px;display:grid;gap:10px}
+.bubble{max-width:88%;padding:10px 12px;border-radius:14px;font-size:13.5px;line-height:1.42}
+.bubble.user{justify-self:end;background:#dff3ff;border-bottom-right-radius:5px}
+.bubble.bot{justify-self:start;background:#fff;border:1px solid var(--line-soft);border-bottom-left-radius:5px}
+.source-chip{display:block;margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft);font-family:'JetBrains Mono',ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--muted)}
+.ux-facts{margin:0;padding:0;list-style:none}
+.ux-facts li{padding:12px 0;border-top:1px solid var(--line-soft);font-size:15.5px;line-height:1.55;color:var(--ink-2)}
+.ux-facts li:first-child{border-top:0;padding-top:0}
+.ux-facts strong{font-weight:600;color:var(--ink)}
+
+/* ---------- Swimlane ---------- */
+.swimlane{margin-top:30px;border:1px solid var(--line-soft);border-radius:10px;overflow:hidden}
+.diagram-title{padding:14px 16px;border-bottom:1px solid var(--line-soft);font-size:15px;font-weight:600}
+.lane-grid{display:grid;grid-template-columns:repeat(4,1fr);background:var(--line-soft);gap:1px}
+.lane{background:#fff;padding:16px;position:relative}
+.lane:not(:last-child)::after{
+  content:'→';
+  position:absolute;
+  right:-12px;
+  top:50%;
+  transform:translateY(-50%);
+  width:24px;
+  height:24px;
+  border:1px solid var(--line);
+  border-radius:50%;
+  background:#fff;
+  color:var(--ink);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:14px;
+  font-weight:600;
+  z-index:2;
+}
+.lane-title{font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);font-weight:600;margin-bottom:12px}
+.lane-step{font-size:14px;line-height:1.45;color:var(--ink-2);padding:10px 0;border-top:1px solid var(--line-soft)}
+.lane-step:first-of-type{border-top:0;padding-top:0}
+
 /* ---------- Footer ---------- */
 footer{padding:48px 0 64px;color:var(--muted);font-size:14px}
 footer .row{display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap}
@@ -190,6 +240,12 @@ footer a:hover{color:var(--ink);border-bottom-color:var(--ink)}
   .wrap{padding:0 20px}
   .facts li{gap:14px}
   .facts .k{flex-basis:100px}
+  .hero-metric{grid-template-columns:1fr;gap:3px}
+  .hero-metric .arrow{display:none}
+  .product-shot{grid-template-columns:1fr}
+  .phone-shot{max-width:330px;margin:0 auto}
+  .lane-grid{grid-template-columns:1fr}
+  .lane:not(:last-child)::after{display:none}
 }
 </style>
 </head>
@@ -222,6 +278,21 @@ footer a:hover{color:var(--ink);border-bottom-color:var(--ink)}
     <span class="lang-ru">Сотрудник задаёт вопрос в Telegram. Ассистент находит ответ в корпоративных правилах, инструкциях и шаблонах — и показывает, из какого файла он его взял.</span>
     <span class="lang-en">An employee asks a question in Telegram. The assistant finds the answer inside corporate rules, manuals and templates — and shows exactly which file it came from.</span>
   </p>
+  <div class="hero-metric" aria-label="Response time">
+    <span>
+      <span class="lang-ru">поиск в PDF</span>
+      <span class="lang-en">PDF search</span>
+      <strong class="lang-ru">10–30 мин</strong>
+      <strong class="lang-en">10–30 min</strong>
+    </span>
+    <span class="arrow">→</span>
+    <span>
+      <span class="lang-ru">ответ с источниками</span>
+      <span class="lang-en">sourced answer</span>
+      <strong class="lang-ru">~5 сек</strong>
+      <strong class="lang-en">~5 sec</strong>
+    </span>
+  </div>
 </section>
 
 <section>
@@ -253,6 +324,66 @@ footer a:hover{color:var(--ink);border-bottom-color:var(--ink)}
       <li>Which contract template should I use for a one-off contractor?</li>
       <li>What's the procedure if cargo arrives with damaged packaging?</li>
       <li>Do we need a formal order to transfer an employee to another role?</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>
+    <span class="lang-ru">Как выглядит ответ</span>
+    <span class="lang-en">What the answer looks like</span>
+  </h2>
+  <p>
+    <span class="lang-ru">Пользователь видит не абстрактный текст от модели, а короткий ответ с confidence, источниками и кнопками обратной связи. Для черновиков документов бот сначала собирает недостающие поля и явно отправляет кейс на проверку HR/Legal.</span>
+    <span class="lang-en">The user does not receive a vague model reply: each answer carries confidence, sources and feedback buttons. For document drafts, the bot first collects missing fields and marks the case for HR/Legal review.</span>
+  </p>
+
+  <div class="product-shot">
+    <div class="phone-shot" aria-label="Telegram dialogue screenshot">
+      <div class="phone-screen">
+        <div class="phone-top">
+          <div class="phone-avatar">TR</div>
+          <div>
+            <div class="phone-name">TestRag Bot</div>
+            <div class="phone-status">
+              <span class="lang-ru">Telegram · whitelist</span>
+              <span class="lang-en">Telegram · whitelist</span>
+            </div>
+          </div>
+        </div>
+        <div class="chat">
+          <div class="bubble user">
+            <span class="lang-ru">Подготовь приказ об отпуске</span>
+            <span class="lang-en">Prepare a vacation order</span>
+          </div>
+          <div class="bubble bot">
+            <span class="lang-ru"><strong>Тип документа:</strong> Приказ о предоставлении отпуска.<br>Чтобы подготовить черновик, не хватает: ФИО работника, даты начала и окончания отпуска, основание отпуска.<br><br>Это не является финальным документом: перед подписанием нужна проверка HR/Legal.</span>
+            <span class="lang-en"><strong>Document type:</strong> Vacation order.<br>Missing fields: employee name, vacation start/end dates and vacation basis.<br><br>This is not a final document: HR/Legal review is required before signing.</span>
+            <span class="source-chip">sources: 02_hr_tmp_leave_order.md · §2 Текст шаблона</span>
+          </div>
+          <div class="bubble bot">
+            <span class="lang-ru">👍 Полезно · 👎 На разбор · 📖 Развернуть</span>
+            <span class="lang-en">👍 Helpful · 👎 Review · 📖 Expand</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="ux-facts">
+      <li>
+        <strong class="lang-ru">UX проверяемый:</strong><strong class="lang-en">Verifiable UX:</strong>
+        <span class="lang-ru">каждый ответ несёт список источников, поэтому сотрудник может открыть первичный документ.</span>
+        <span class="lang-en">every answer carries source references, so an employee can open the underlying document.</span>
+      </li>
+      <li>
+        <strong class="lang-ru">Юр-риск ограничен:</strong><strong class="lang-en">Legal risk is bounded:</strong>
+        <span class="lang-ru">модель определяет тип документа и поля, но финальный текст собирается только из кодового шаблона.</span>
+        <span class="lang-en">the model detects document type and fields, while final wording is assembled only from code templates.</span>
+      </li>
+      <li>
+        <strong class="lang-ru">Feedback замыкает цикл:</strong><strong class="lang-en">Feedback closes the loop:</strong>
+        <span class="lang-ru">негативная оценка попадает в review_queue и показывает, где нужно усилить базу знаний.</span>
+        <span class="lang-en">negative ratings go to review_queue and show where the knowledge base needs work.</span>
+      </li>
     </ul>
   </div>
 </section>
@@ -394,8 +525,8 @@ footer a:hover{color:var(--ink);border-bottom-color:var(--ink)}
     <div class="proof-item">
       <div class="proof-value">1.00</div>
       <div class="proof-label">
-        <span class="lang-ru">Hit@5 на golden set</span>
-        <span class="lang-en">Hit@5 on the golden set</span>
+        <span class="lang-ru">Hit@5 на golden set, n=10</span>
+        <span class="lang-en">Hit@5 on golden set, n=10</span>
       </div>
     </div>
     <div class="proof-item">
@@ -467,6 +598,59 @@ footer a:hover{color:var(--ink);border-bottom-color:var(--ink)}
         <span class="lang-ru">В Postgres попадают вопрос, тип запроса, confidence, источники, latency, модель, токены и оценка пользователя. Плохие ответы уходят в review_queue.</span>
         <span class="lang-en">Postgres stores the question, request type, confidence, sources, latency, model, tokens and user rating. Bad answers go into review_queue.</span>
       </p>
+    </div>
+  </div>
+
+  <div class="swimlane" aria-label="Request swimlane diagram">
+    <div class="diagram-title">
+      <span class="lang-ru">Swim-lane запроса</span>
+      <span class="lang-en">Request swimlane</span>
+    </div>
+    <div class="lane-grid">
+      <div class="lane">
+        <div class="lane-title">Telegram</div>
+        <div class="lane-step">
+          <span class="lang-ru">Сотрудник пишет вопрос или просит черновик</span>
+          <span class="lang-en">Employee asks a question or requests a draft</span>
+        </div>
+        <div class="lane-step">
+          <span class="lang-ru">Кнопки feedback и quick-actions остаются в чате</span>
+          <span class="lang-en">Feedback and quick-action buttons stay in chat</span>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="lane-title">n8n</div>
+        <div class="lane-step">
+          <span class="lang-ru">Polling bridge забирает update без публичного туннеля</span>
+          <span class="lang-en">Polling bridge pulls the update without a public tunnel</span>
+        </div>
+        <div class="lane-step">
+          <span class="lang-ru">Whitelist и маршрутизация отправляют запрос в API</span>
+          <span class="lang-en">Whitelist and routing pass the request to the API</span>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="lane-title">FastAPI RAG</div>
+        <div class="lane-step">
+          <span class="lang-ru">Hybrid retrieval находит chunks и считает confidence</span>
+          <span class="lang-en">Hybrid retrieval finds chunks and computes confidence</span>
+        </div>
+        <div class="lane-step">
+          <span class="lang-ru">Policy решает: ответ, отказ или human review</span>
+          <span class="lang-en">Policy decides: answer, refusal or human review</span>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="lane-title">Postgres</div>
+        <div class="lane-step">
+          <span class="lang-ru">Хранятся chunks, embeddings, request_logs и feedback</span>
+          <span class="lang-en">Stores chunks, embeddings, request_logs and feedback</span>
+        </div>
+        <div class="lane-step">
+          <span class="lang-ru">review_queue показывает пробелы базы знаний</span>
+          <span class="lang-en">review_queue reveals knowledge-base gaps</span>
+        </div>
+      </div>
     </div>
   </div>
 </section>
