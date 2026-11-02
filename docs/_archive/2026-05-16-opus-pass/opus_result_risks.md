@@ -70,7 +70,7 @@
 **Likelihood = 3:** на чистом PowerShell 5.1 — реально; на 7.x с UTF-8 default — нет.
 **Impact = 4:** легитимный happy-path ломается, выглядит как fail модели.
 
-**Memory pin:** `~/.claude/memory/feedback_windows_cp1252_pipe.md` — Юлия знает эту проблему отдельно (codex TUI cyrillic). Cm здесь тот же класс.
+**Memory pin:** `~/.claude/memory/feedback_windows_cp1252_pipe.md` — пользователь знает эту проблему отдельно (codex TUI cyrillic). Cm здесь тот же класс.
 
 **Мitigation:**
 1. До демо проверить `$PSVersionTable.PSVersion` — если 5.1, в Body передавать byte-encoded UTF-8:
